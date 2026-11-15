@@ -43,25 +43,26 @@
        1. DEFAULT DATA & LOCALSTORAGE STATE
        ========================================== */
     const BRANDS = [
-      { id: 'toyota', name: 'TOYOTA', logo: '🚗' },
-      { id: 'honda', name: 'HONDA', logo: '🚙' },
-      { id: 'isuzu', name: 'ISUZU', logo: '🛻' },
-      { id: 'nissan', name: 'NISSAN', logo: '🚘' },
-      { id: 'mitsubishi', name: 'MITSUBISHI', logo: '🚐' },
-      { id: 'ford', name: 'FORD', logo: '🚚' },
-      { id: 'mazda', name: 'MAZDA', logo: '🏎️' },
-      { id: 'suzuki', name: 'SUZUKI', logo: '🚕' },
-      { id: 'subaru', name: 'SUBARU', logo: '🚙' },
-      { id: 'byd', name: 'BYD', logo: '⚡' },
-      { id: 'omoda_jaecoo', name: 'OMODA & JAECOO', logo: '🌟' },
-      { id: 'mg', name: 'MG', logo: '🔋' },
-      { id: 'gac_aion', name: 'GAC AION', logo: '🌐' },
-      { id: 'geely', name: 'GEELY', logo: '🧭' },
-      { id: 'deepal', name: 'DEEPAL', logo: '🚀' },
-      { id: 'gwm', name: 'GWM', logo: '🛡️' },
-      { id: 'chery', name: 'CHERY', logo: '🎯' },
-      { id: 'icar', name: 'iCAR', logo: '💡' },
-      { id: 'lepas', name: 'LEPAS', logo: '💎' }
+      { id: 'toyota', name: 'TOYOTA', img: 'https://img1.pic.in.th/images/Toyota.png' },
+      { id: 'honda', name: 'HONDA', img: 'https://img2.pic.in.th/Honda.png' },
+      { id: 'isuzu', name: 'ISUZU', img: 'https://img1.pic.in.th/images/Isuzu.png' },
+      { id: 'nissan', name: 'NISSAN', img: 'https://img2.pic.in.th/Nissan.png' },
+      { id: 'mitsubishi', name: 'MITSUBISHI', img: 'https://img2.pic.in.th/Mitsubishi.png' },
+      { id: 'ford', name: 'FORD', img: 'https://img1.pic.in.th/images/Ford.png' },
+      { id: 'mazda', name: 'MAZDA', img: 'https://img1.pic.in.th/images/Mazda.png' },
+      { id: 'suzuki', name: 'SUZUKI', img: 'https://img1.pic.in.th/images/Suzuki.png' },
+      { id: 'kia', name: 'KIA', img: 'https://img2.pic.in.th/Kia.png' },
+      { id: 'byd', name: 'BYD', img: 'https://img2.pic.in.th/BYD.png' },
+      { id: 'omoda_jaecoo', name: 'OMODA & JAECOO', img: 'https://img2.pic.in.th/OJ.png' },
+      { id: 'mg', name: 'MG', img: 'https://img2.pic.in.th/MG.png' },
+      { id: 'gac_aion', name: 'GAC AION', img: 'https://img2.pic.in.th/Aion.png' },
+      { id: 'geely', name: 'GEELY', img: 'https://img2.pic.in.th/Geely.png' },
+      { id: 'Changan', name: 'CHANGAN', img: 'https://img1.pic.in.th/images/Changan.png' },
+      { id: 'gwm', name: 'GWM', img: 'https://img2.pic.in.th/GWM.png' },
+      { id: 'chery', name: 'CHERY', img: 'https://img1.pic.in.th/images/Chery.png' },
+      { id: 'icar', name: 'iCAR', img: 'https://img1.pic.in.th/images/iCAR.png' },
+      { id: 'lepas', name: 'LEPAS', img: 'https://img2.pic.in.th/Lepas.png' },
+      { id: 'Tesla', name: 'TESLA', img: 'https://img1.pic.in.th/images/Tesla.png' }
     ];
 
     let state = {
@@ -138,8 +139,10 @@
           <div class="max-w-4xl w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             ${BRANDS.map(b => `
               <button onclick="selectBrand('${b.id}')" class="group flex flex-col items-center justify-center p-5 rounded-2xl bg-slate-800/60 border border-slate-700/60 hover:border-blue-500 hover:bg-slate-800 transition-all duration-200 shadow-lg hover:shadow-blue-500/10">
-                <span class="text-3xl mb-2 group-hover:scale-110 transition-transform">${b.logo}</span>
-                <span class="font-semibold text-sm tracking-wide text-slate-200">${b.name}</span>
+                <div class="w-12 h-12 mb-3 flex items-center justify-center bg-white/10 rounded-xl p-2 group-hover:scale-110 transition-transform">
+                  <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain filter brightness-90 group-hover:brightness-100">
+                </div>
+                <span class="font-semibold text-xs tracking-wide text-slate-200 text-center">${b.name}</span>
               </button>
             `).join('')}
           </div>
