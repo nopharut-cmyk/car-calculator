@@ -59,7 +59,9 @@
       selectedBrand: null,
       company: { name: 'บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด', address: '59/3 หมู่ 4 ตำบลบ้านใหม่ อำเภอเมืองปทุมธานี จังหวัดปทุมธานี 12000' },
       cars: [],
-      campaigns: []
+      campaigns: [],
+      editingCarId: null,
+      editingCampaignIndex: null
     };
 
     const fmt = n => (Number(n) || 0).toLocaleString('th-TH');
@@ -80,8 +82,8 @@
         console.warn("⚠️ ไม่สามารถเชื่อมต่อ Cloud D1 ได้ (กำลังใช้ Mock Data สำรอง):", err);
         if (!state.cars || state.cars.length === 0) {
           state.cars = [
-            { id: 101, brand: state.selectedBrand, model: 'URBAN', grade: 'MAX', price: 649900, colors: [{ name: 'สีขาวมุก', price: 7000 }, { name: 'สีดำ', price: 0 }] },
-            { id: 102, brand: state.selectedBrand, model: 'URBAN', grade: 'PRO', price: 729900, colors: [{ name: 'สีขาวมุก', price: 7000 }, { name: 'สีดำ', price: 0 }] }
+            { id: 101, brand: state.selectedBrand, model: 'URBAN', grade: 'MAX', price: 649900, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'สีขาวมุก', price: 7000 }] },
+            { id: 102, brand: state.selectedBrand, model: 'URBAN', grade: 'PRO', price: 729900, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'LAVENDER PURPLE', price: 10000 }] }
           ];
         }
         if (!state.campaigns || state.campaigns.length === 0) {
@@ -266,18 +268,22 @@
 
     function renderSettings() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR' };
+      const carsForBrand = state.cars.filter(c => c.brand === state.selectedBrand);
 
       return `
         <div class="min-h-screen bg-slate-100 flex flex-col">
-          <header class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
-            <h1 class="font-bold">⚙️ ตั้งค่าข้อมูลแบรนด์ (Cloud D1): ${brandObj.name}</h1>
-            <button onclick="state.step='calc';render();setTimeout(initCalcValues, 50);" class="px-4 py-2 bg-slate-800 rounded-xl text-xs">กลับหน้าคำนวณ</button>
+          <header class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-30">
+            <h1 class="font-bold text-sm sm:text-base">⚙️ ตั้งค่าข้อมูลแบรนด์: ${brandObj.name}</h1>
+            <button onclick="state.step='calc';render();setTimeout(initCalcValues, 50);" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md transition-all">กลับหน้าคำนวณ</button>
           </header>
-          <main class="max-w-4xl w-full mx-auto p-6 space-y-6">
+          <main class="max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
             
-            <!-- ส่วนเพิ่มแคมเปญใหม่พร้อมระบบ AI วิเคราะห์ตารางดอกเบี้ยอัตโนมัติ -->
+            <!-- 1. แผนกจัดการบริษัทไฟแนนซ์และแคมเปญดอกเบี้ย -->
             <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
-              <h3 class="font-bold text-slate-800 mb-2">➕ เพิ่มแคมเปญไฟแนนซ์และเรทดอกเบี้ย (รองรับ AI วิเคราะห์ภาพ)</h3>
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-800">🏦 จัดการบริษัทไฟแนนซ์และแคมเปญดอกเบี้ย</h3>
+                ${state.editingCampaignIndex !== null ? `<button onclick="cancelEditCampaign()" class="text-xs text-red-500 font-semibold hover:underline">ยกเลิกการแก้ไข</button>` : ''}
+              </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-medium text-slate-500 mb-1">บริษัทไฟแนนซ์</label>
@@ -323,25 +329,107 @@
                 </table>
               </div>
 
-              <!-- ปุ่มบันทึกแคมเปญไฟแนนซ์ -->
               <div class="flex justify-end pt-3">
-                <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all">💾 บันทึกแคมเปญและเรทดอกเบี้ยลงระบบ</button>
+                <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all">
+                  ${state.editingCampaignIndex !== null ? '💾 บันทึกการแก้ไขแคมเปญ' : '💾 บันทึกแคมเปญและเรทดอกเบี้ยลงระบบ'}
+                </button>
+              </div>
+
+              <!-- ตารางแสดงรายการแคมเปญที่บันทึกแล้ว -->
+              <div class="pt-4 border-t border-slate-100">
+                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการแคมเปญไฟแนนซ์ในระบบ</h4>
+                <div class="space-y-2">
+                  ${state.campaigns.length === 0 ? `<p class="text-xs text-slate-400">ยังไม่มีแคมเปญในระบบ</p>` : state.campaigns.map((cp, idx) => `
+                    <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs">
+                      <div>
+                        <span class="font-bold text-slate-800">[${cp.finance}] ${cp.name}</span>
+                      </div>
+                      <div class="flex space-x-2">
+                        <button onclick="editCampaign(${idx})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold">แก้ไข</button>
+                        <button onclick="deleteCampaign(${idx})" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold">ลบ</button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
               </div>
             </div>
 
-            <!-- ส่วนเพิ่มรุ่นรถในระบบคลาวด์ -->
-            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-              <h3 class="font-bold text-slate-800 mb-4">🚗 ข้อมูลรุ่นรถในระบบคลาวด์</h3>
+            <!-- 2. แผนกจัดการข้อมูลรุ่นรถและสี -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-800">🚗 ข้อมูลรุ่นรถในระบบคลาวด์</h3>
+                ${state.editingCarId !== null ? `<button onclick="cancelEditCar()" class="text-xs text-red-500 font-semibold hover:underline">ยกเลิกการแก้ไข</button>` : ''}
+              </div>
               <form onsubmit="addNewCarModel(event)" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <input type="text" id="newModelName" placeholder="ชื่อรุ่น (เช่น URBAN)" required class="bg-slate-50 border rounded-xl p-3 text-sm font-semibold">
-                  <input type="text" id="newGradeName" placeholder="เกรด (เช่น MAX)" required class="bg-slate-50 border rounded-xl p-3 text-sm font-semibold">
-                  <input type="number" id="newPrice" placeholder="ราคารถ (บาท)" required class="bg-slate-50 border rounded-xl p-3 text-sm font-semibold">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อรุ่นรถ (Model)</label>
+                    <input type="text" id="newModelName" placeholder="เช่น URBAN, MG4" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">เกรด / รุ่นย่อย (Grade)</label>
+                    <input type="text" id="newGradeName" placeholder="เช่น STANDARD, MAX" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">ราคารถตั้งต้น (บาท)</label>
+                    <input type="number" id="newPrice" placeholder="เช่น 579900" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                  </div>
                 </div>
+
+                <!-- กำหนดสีรถและค่าสีเพิ่มเติม -->
+                <div class="pt-2">
+                  <label class="block text-xs font-medium text-slate-500 mb-2">กำหนดสีรถและค่าสีเพิ่มเติม</label>
+                  <div id="colorRowsContainer" class="space-y-2">
+                    <div class="flex gap-2 items-center color-row">
+                      <input type="text" placeholder="ชื่อสี (เช่น สีมาตรฐาน หรือ LAVENDER PURPLE)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input" value="สีมาตรฐาน">
+                      <input type="number" placeholder="ค่าสี (บาท เช่น 0 หรือ 7000)" class="w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input" value="0">
+                      <button type="button" onclick="removeColorRow(this)" class="px-3 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-semibold">❌</button>
+                    </div>
+                  </div>
+                  <button type="button" onclick="addColorRow()" class="text-xs text-blue-600 font-bold hover:underline mt-2 inline-block">+ เพิ่มสีอื่นๆ</button>
+                </div>
+
                 <div class="flex justify-end pt-2">
-                  <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all">บันทึกข้อมูลงคลาวด์</button>
+                  <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all">
+                    ${state.editingCarId !== null ? '💾 บันทึกการแก้ไขรุ่นรถ' : 'บันทึกข้อมูลงคลาวด์'}
+                  </button>
                 </div>
               </form>
+
+              <!-- ตารางแสดงรายการรุ่นรถในระบบปัจจุบัน -->
+              <div class="pt-6 border-t border-slate-100">
+                <h3 class="font-bold text-slate-800 mb-3">📋 รายการรุ่นรถในระบบปัจจุบัน</h3>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="bg-slate-100 text-slate-600">
+                        <th class="p-3 border">รุ่น (Model)</th>
+                        <th class="p-3 border">เกรด (Grade)</th>
+                        <th class="p-3 border">ราคารถตั้งต้น</th>
+                        <th class="p-3 border">สีและค่าสีเพิ่มเติม</th>
+                        <th class="p-3 border text-center">จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${carsForBrand.length === 0 ? `<tr><td colspan="5" class="p-4 text-center text-slate-400">ยังไม่มีข้อมูลรุ่นรถในระบบสำหรับแบรนด์นี้</td></tr>` : carsForBrand.map(car => `
+                        <tr class="border-b hover:bg-slate-50">
+                          <td class="p-3 font-semibold text-slate-800">${car.model}</td>
+                          <td class="p-3 font-semibold text-slate-600">${car.grade}</td>
+                          <td class="p-3 font-semibold text-blue-600">${fmt(car.price)} ฿</td>
+                          <td class="p-3 text-slate-600">
+                            ${(car.colors || []).map(c => `<span class="inline-block bg-slate-100 px-2 py-1 rounded-md mr-1 mb-1">${c.name} (+${fmt(c.price)}฿)</span>`).join('')}
+                          </td>
+                          <td class="p-3 text-center space-x-1">
+                            <button onclick="editCar(${car.id})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold">แก้ไข</button>
+                            <button onclick="deleteCar(${car.id})" class="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold">ลบ</button>
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
             </div>
 
           </main>
@@ -374,7 +462,7 @@
       if (car) {
         document.getElementById('carPrice').value = car.price;
         const colorSel = document.getElementById('colorSelect');
-        colorSel.innerHTML = (car.colors || []).map((col, i) => `<option value="${i}" data-price="${col.price}">${col.name}</option>`).join('') || '<option value="0" data-price="0">สีมาตรฐาน</option>';
+        colorSel.innerHTML = (car.colors || []).map((col, i) => `<option value="${i}" data-price="${col.price}">${col.name} (+${fmt(col.price)}฿)</option>`).join('') || '<option value="0" data-price="0">สีมาตรฐาน</option>';
         onColorChange();
       }
     }
@@ -386,7 +474,29 @@
       calculate();
     }
 
-    // ฟังก์ชันจัดการอัปโหลดภาพและ AI Vision พร้อมระบบ Fallback ป้องกัน Error
+    // ฟังก์ชันจัดการสีเพิ่มเติมในฟอร์มรุ่นรถ
+    function addColorRow(name = '', price = 0) {
+      const container = document.getElementById('colorRowsContainer');
+      const div = document.createElement('div');
+      div.className = 'flex gap-2 items-center color-row';
+      div.innerHTML = `
+        <input type="text" placeholder="ชื่อสี (เช่น LAVENDER PURPLE)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input" value="${name}">
+        <input type="number" placeholder="ค่าสี (บาท เช่น 7000)" class="w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input" value="${price}">
+        <button type="button" onclick="removeColorRow(this)" class="px-3 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-semibold">❌</button>
+      `;
+      container.appendChild(div);
+    }
+
+    function removeColorRow(btn) {
+      const row = btn.parentElement;
+      if (document.querySelectorAll('.color-row').length > 1) {
+        row.remove();
+      } else {
+        alert('ต้องมีรายการสีอย่างน้อย 1 รายการ');
+      }
+    }
+
+    // AI Vision / Fallback handler
     async function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -410,9 +520,7 @@
         if (!response.ok) throw new Error('API extraction endpoint not available');
         const extractedData = await response.json();
 
-        if (extractedData.rates) {
-          fillRateTable(extractedData.rates);
-        }
+        if (extractedData.rates) fillRateTable(extractedData.rates);
         if (extractedData.finance_company && extractedData.finance_company !== 'Unknown') {
           document.querySelector('#financeCompanyInput').value = extractedData.finance_company;
         }
@@ -426,7 +534,6 @@
 
       } catch (err) {
         console.warn("AI Endpoint fallback triggered:", err);
-        // Fallback จำลองการวิเคราะห์ภาพสำเร็จเพื่อให้ใช้งานได้ทันที
         const mockRates = {
           30: { 24: '1.89', 36: '1.99', 48: '2.09', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
           25: { 24: '1.99', 36: '2.09', 48: '2.19', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
@@ -436,12 +543,8 @@
           5:  { 24: '2.39', 36: '2.49', 48: '3.89', 60: '4.35', 72: '4.59', 84: '5.15', 96: '-' }
         };
         fillRateTable(mockRates);
-        if (!document.querySelector('#financeCompanyInput').value) {
-          document.querySelector('#financeCompanyInput').value = 'ไฟแนนซ์แนะนำ';
-        }
-        if (!document.querySelector('#campaignNameInput').value) {
-          document.querySelector('#campaignNameInput').value = 'แคมเปญจากภาพถ่าย';
-        }
+        if (!document.querySelector('#financeCompanyInput').value) document.querySelector('#financeCompanyInput').value = 'กรุงศรี ออโต้';
+        if (!document.querySelector('#campaignNameInput').value) document.querySelector('#campaignNameInput').value = 'แคมเปญดอกเบี้ยพิเศษ';
 
         statusLabel.className = 'text-xs text-emerald-600 font-bold mt-1';
         statusLabel.innerText = '✅ AI (Simulated) วิเคราะห์และเติมข้อมูลตารางดอกเบี้ยสำเร็จ!';
@@ -454,15 +557,13 @@
         for (const [month, rate] of Object.entries(terms)) {
           if (rate !== null && rate !== undefined) {
             const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
-            if (input) {
-              input.value = rate;
-            }
+            if (input) input.value = rate;
           }
         }
       }
     }
 
-    // ฟังก์ชันบันทึกแคมเปญไฟแนนซ์และเรทดอกเบี้ย
+    // CRUD Campaigns
     async function saveCampaign() {
       const finance = document.getElementById('financeCompanyInput').value.trim();
       const name = document.getElementById('campaignNameInput').value.trim();
@@ -482,63 +583,140 @@
         });
       });
 
-      const newCampaign = { finance, name, rates };
+      const campaignData = { finance, name, rates };
 
-      try {
-        await fetch('/api/campaigns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newCampaign)
-        });
-      } catch (err) {
-        console.warn("Cloud save skipped, saving locally:", err);
+      if (state.editingCampaignIndex !== null) {
+        state.campaigns[state.editingCampaignIndex] = campaignData;
+        state.editingCampaignIndex = null;
+        alert('✅ อัปเดตแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
+      } else {
+        try {
+          await fetch('/api/campaigns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(campaignData)
+          });
+        } catch (err) { console.warn("Cloud save skipped:", err); }
+        state.campaigns.push(campaignData);
+        alert('✅ บันทึกแคมเปญไฟแนนซ์และเรทดอกเบี้ยเรียบร้อยแล้ว!');
       }
 
-      state.campaigns.push(newCampaign);
-      alert('✅ บันทึกแคมเปญไฟแนนซ์และเรทดอกเบี้ยเรียบร้อยแล้ว!');
-      
       document.getElementById('financeCompanyInput').value = '';
       document.getElementById('campaignNameInput').value = '';
-      state.step = 'calc';
       render();
     }
 
-    // ฟังก์ชันบันทึกข้อมูลรุ่นรถยนต์ลงคลาวด์และหน่วยความจำ
+    function editCampaign(index) {
+      const cp = state.campaigns[index];
+      if (!cp) return;
+      state.editingCampaignIndex = index;
+      document.getElementById('financeCompanyInput').value = cp.finance;
+      document.getElementById('campaignNameInput').value = cp.name;
+
+      if (cp.rates) {
+        for (const [down, terms] of Object.entries(cp.rates)) {
+          for (const [month, rate] of Object.entries(terms)) {
+            const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
+            if (input) input.value = (rate !== null && rate !== undefined) ? rate : '-';
+          }
+        }
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      render();
+    }
+
+    function cancelEditCampaign() {
+      state.editingCampaignIndex = null;
+      render();
+    }
+
+    function deleteCampaign(index) {
+      if (confirm('คุณต้องการลบแคมเปญนี้ใช่หรือไม่?')) {
+        state.campaigns.splice(index, 1);
+        render();
+      }
+    }
+
+    // CRUD Cars
     async function addNewCarModel(e) {
       e.preventDefault();
       const model = document.getElementById('newModelName').value.trim().toUpperCase();
       const grade = document.getElementById('newGradeName').value.trim().toUpperCase();
       const price = num(document.getElementById('newPrice').value);
 
-      const newCar = {
-        id: Date.now(),
-        brand: state.selectedBrand,
-        model,
-        grade,
-        price,
-        colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'สีขาวมุก', price: 7000 }]
-      };
+      const colors = [];
+      document.querySelectorAll('.color-row').forEach(row => {
+        const cName = row.querySelector('.color-name-input').value.trim();
+        const cPrice = num(row.querySelector('.color-price-input').value);
+        if (cName) colors.push({ name: cName, price: cPrice });
+      });
 
-      try {
-        await fetch('/api/cars', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newCar)
-        });
-      } catch (err) {
-        console.warn("Cloud save skipped, saving locally:", err);
+      if (state.editingCarId !== null) {
+        const car = state.cars.find(c => c.id == state.editingCarId);
+        if (car) {
+          car.model = model;
+          car.grade = grade;
+          car.price = price;
+          car.colors = colors;
+        }
+        state.editingCarId = null;
+        alert('✅ อัปเดตข้อมูลรุ่นรถเรียบร้อยแล้ว!');
+      } else {
+        const newCar = {
+          id: Date.now(),
+          brand: state.selectedBrand,
+          model,
+          grade,
+          price,
+          colors: colors.length > 0 ? colors : [{ name: 'สีมาตรฐาน', price: 0 }]
+        };
+
+        try {
+          await fetch('/api/cars', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newCar)
+          });
+        } catch (err) { console.warn("Cloud save skipped:", err); }
+        state.cars.push(newCar);
+        alert('✅ บันทึกข้อมูลรุ่นรถสำเร็จ!');
       }
-
-      state.cars.push(newCar);
-      alert('✅ บันทึกข้อมูลรุ่นรถสำเร็จ!');
 
       document.getElementById('newModelName').value = '';
       document.getElementById('newGradeName').value = '';
       document.getElementById('newPrice').value = '';
-
-      state.step = 'calc';
       render();
       setTimeout(initCalcValues, 50);
+    }
+
+    function editCar(id) {
+      const car = state.cars.find(c => c.id == id);
+      if (!car) return;
+      state.editingCarId = id;
+      document.getElementById('newModelName').value = car.model;
+      document.getElementById('newGradeName').value = car.grade;
+      document.getElementById('newPrice').value = car.price;
+
+      const container = document.getElementById('colorRowsContainer');
+      container.innerHTML = '';
+      if (car.colors && car.colors.length > 0) {
+        car.colors.forEach(c => addColorRow(c.name, c.price));
+      } else {
+        addColorRow('สีมาตรฐาน', 0);
+      }
+      render();
+    }
+
+    function cancelEditCar() {
+      state.editingCarId = null;
+      render();
+    }
+
+    function deleteCar(id) {
+      if (confirm('คุณต้องการลบข้อมูลรุ่นรถนี้ใช่หรือไม่?')) {
+        state.cars = state.cars.filter(c => c.id != id);
+        render();
+      }
     }
 
     function calcDownByPct() {
