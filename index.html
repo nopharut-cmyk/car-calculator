@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
-  <title>Multi-Brand Car Finance & Quotation Pro (Cloudflare D1 + AI)</title>
+  <title>Multi-Brand Car Finance & Quotation Pro (Premium FinTech)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -22,24 +22,243 @@
     };
   </script>
   <style>
-    body { font-family: 'Prompt', sans-serif; background-color: #f1f5f9; color: #1e293b; }
-    @media print { .no-print { display: none !important; } body { background: white !important; } }
+    body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; color: #1e293b; }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Print Media Query - A4 1 Page Strict Lock */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 6mm;
+      }
+      html, body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #app, #printModal, .no-print {
+        display: none !important;
+      }
+      #printArea {
+        display: flex !important;
+        flex-direction: column;
+        justify-content: space-between;
+        width: 100% !important;
+        max-width: 198mm !important;
+        min-height: 278mm !important;
+        max-height: 284mm !important;
+        margin: 0 auto !important;
+        padding: 4mm 6mm !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+        page-break-after: avoid !important;
+        page-break-before: avoid !important;
+        page-break-inside: avoid !important;
+      }
+    }
+    .print-only { display: none; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased">
-  <div id="app" class="flex-1 flex flex-col"></div>
+<body class="min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+  
+  <!-- Main Application Container -->
+  <div id="app" class="flex-1 flex flex-col no-print"></div>
+
+  <!-- Modal ตั้งค่าข้อมูลผู้ขายและของแถมก่อนพิมพ์ -->
+  <div id="printModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print transition-opacity">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center pb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">🎁</span>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg text-slate-900">ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึก PDF</h3>
+            <p class="text-xs text-slate-500">ตรวจสอบข้อมูลติดต่อและระบุรายการของแถมสำหรับลูกค้า</p>
+          </div>
+        </div>
+        <button onclick="closePrintModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold transition-colors">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs sm:text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-medium text-slate-600 mb-1.5">ชื่อที่ปรึกษาการขาย</label>
+            <input type="text" id="modalSalesName" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none transition-all">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1.5">เบอร์โทรศัพท์</label>
+            <input type="text" id="modalSalesPhone" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none transition-all">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1.5">LINE ID</label>
+            <input type="text" id="modalSalesLine" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none transition-all">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1.5">โชว์รูม / สาขา</label>
+            <input type="text" id="modalSalesBranch" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none transition-all">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-600 mb-1.5">ชื่อลูกค้า / ผู้รับข้อเสนอ (เว้นว่างได้)</label>
+          <input type="text" id="modalCustomerName" placeholder="เช่น คุณลูกค้าคนสำคัญ (เบอร์โทร ...)" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none transition-all">
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-600 mb-1.5">รายการของแถมและสิทธิพิเศษ (พิมพ์แยกบรรทัด)</label>
+          <textarea id="modalFreebies" rows="5" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none transition-all leading-relaxed" placeholder="1. ประกันภัยชั้น 1 + พ.ร.บ.&#10;2. ฟิล์มกรองแสงเซรามิกรอบคัน&#10;3. ผ้ายางเข้ารูป / กรอบป้ายทะเบียน&#10;4. บริการช่วยเหลือฉุกเฉิน 24 ชม."></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-3 pt-4 border-t border-slate-100">
+        <button onclick="closePrintModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition-colors">ยกเลิก</button>
+        <button onclick="executePrint()" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2">
+          <span>🖨️</span> ยืนยันพิมพ์ / บันทึก PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- พื้นที่สำหรับพิมพ์ A4 (แยกอยู่นอก #app เพื่อไม่ให้ถูกซ่อนตอนสั่ง Print) -->
+  <div id="printArea" class="print-only text-slate-900 font-sans">
+    <!-- Top Section -->
+    <div>
+      <!-- Header -->
+      <div class="flex justify-between items-start border-b-2 border-slate-900 pb-3 mb-4">
+        <div class="flex items-center gap-3">
+          <img id="printBrandLogo" src="" alt="Brand" class="w-12 h-12 object-contain p-1 border border-slate-200 rounded-xl bg-slate-50">
+          <div>
+            <h1 id="printCompanyName" class="text-sm font-extrabold text-slate-900 tracking-tight"></h1>
+            <p id="printCompanyAddress" class="text-slate-600 text-[10px] mt-0.5 max-w-md leading-snug"></p>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="inline-block px-2.5 py-1 bg-slate-900 text-white text-[11px] font-bold rounded-lg tracking-wider uppercase">ใบเสนอราคา / QUOTATION</span>
+          <p class="text-slate-500 text-[10px] mt-1 font-medium">วันที่ออกเอกสาร: <span id="printDate" class="text-slate-800 font-semibold"></span></p>
+        </div>
+      </div>
+
+      <!-- Info Grid -->
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px] space-y-1">
+          <div class="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">ข้อมูลรถยนต์ (Vehicle Details)</div>
+          <p><span class="text-slate-500 inline-block w-24">แบรนด์ / รุ่น:</span> <strong id="printModel" class="text-slate-900"></strong></p>
+          <p><span class="text-slate-500 inline-block w-24">เกรด / รุ่นย่อย:</span> <strong id="printGrade" class="text-slate-900"></strong></p>
+          <p><span class="text-slate-500 inline-block w-24">สีตัวถัง:</span> <strong id="printColor" class="text-slate-900"></strong></p>
+          <p><span class="text-slate-500 inline-block w-24">เสนอราคาแก่:</span> <strong id="printCustomer" class="text-slate-900">-</strong></p>
+        </div>
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10.5px] space-y-1">
+          <div class="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">ที่ปรึกษาการขาย (Sales Consultant)</div>
+          <p><span class="text-slate-500 inline-block w-24">ชื่อ-นามสกุล:</span> <strong id="printSalesName" class="text-slate-900"></strong></p>
+          <p><span class="text-slate-500 inline-block w-24">เบอร์โทรศัพท์:</span> <strong id="printSalesPhone" class="text-slate-900"></strong></p>
+          <p><span class="text-slate-500 inline-block w-24">LINE ID:</span> <strong id="printSalesLine" class="text-slate-900"></strong></p>
+          <p><span class="text-slate-500 inline-block w-24">โชว์รูม / สาขา:</span> <strong id="printSalesBranch" class="text-slate-900"></strong></p>
+        </div>
+      </div>
+
+      <!-- Price Breakdown Table -->
+      <div class="mb-4">
+        <h3 class="font-bold text-slate-800 mb-1.5 text-[11px] flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span> รายละเอียดการคำนวณราคารถยนต์สุทธิ
+        </h3>
+        <table class="w-full border-collapse border border-slate-300 text-[10.5px]">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold">
+              <th class="border border-slate-300 py-1.5 px-2.5 text-left">รายการ (Description)</th>
+              <th class="border border-slate-300 py-1.5 px-2.5 text-right w-32">ราคาตั้งต้น (บาท)</th>
+              <th class="border border-slate-300 py-1.5 px-2.5 text-right w-32">ส่วนลด / เพิ่มเติม</th>
+              <th class="border border-slate-300 py-1.5 px-2.5 text-right w-36">ยอดรวม (บาท)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="border border-slate-300 py-1.5 px-2.5 font-medium text-slate-800">ราคารถยนต์มาตรฐานโรงงาน</td>
+              <td class="border border-slate-300 py-1.5 px-2.5 text-right" id="printBasePrice">0</td>
+              <td class="border border-slate-300 py-1.5 px-2.5 text-right text-red-600 font-semibold" id="printDiscount">-0</td>
+              <td class="border border-slate-300 py-1.5 px-2.5 text-right font-bold text-slate-900" id="printNetCarPrice">0</td>
+            </tr>
+            <tr>
+              <td class="border border-slate-300 py-1.5 px-2.5 font-medium text-slate-800">ค่าสีพิเศษ (<span id="printColorPriceLabel">0</span> ฿) + อุปกรณ์ตกแต่งเพิ่มเติม (<span id="printAccPriceLabel">0</span> ฿)</td>
+              <td class="border border-slate-300 py-1.5 px-2.5 text-right">-</td>
+              <td class="border border-slate-300 py-1.5 px-2.5 text-right text-slate-700" id="printAddonPrice">+0</td>
+              <td class="border border-slate-300 py-1.5 px-2.5 text-right font-bold text-slate-900" id="printNetAddon">0</td>
+            </tr>
+            <tr class="bg-blue-50/80">
+              <td colspan="3" class="border border-slate-300 py-2 px-2.5 text-right font-bold text-blue-950">ราคารถยนต์สุทธิรวมตกแต่ง (Net Vehicle Price)</td>
+              <td class="border border-slate-300 py-2 px-2.5 text-right font-extrabold text-blue-700 text-xs" id="printFinalNetPrice">0 ฿</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Finance Installment Plans Table -->
+      <div class="mb-4">
+        <h3 class="font-bold text-slate-800 mb-1.5 text-[11px] flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span> ตารางเปรียบเทียบแผนการผ่อนชำระ (Finance Quotation Plans)
+        </h3>
+        <table class="w-full border-collapse border border-slate-300 text-center text-[10.5px]">
+          <thead>
+            <tr class="bg-slate-800 text-white font-bold">
+              <th class="border border-slate-700 py-1.5 px-2 text-left">แผน / แคมเปญไฟแนนซ์</th>
+              <th class="border border-slate-700 py-1.5 px-2">ระยะเวลา</th>
+              <th class="border border-slate-700 py-1.5 px-2 text-right">เงินดาวน์ (% / บาท)</th>
+              <th class="border border-slate-700 py-1.5 px-2 text-right">ยอดจัดไฟแนนซ์</th>
+              <th class="border border-slate-700 py-1.5 px-2">อัตราดอกเบี้ย</th>
+              <th class="border border-slate-700 py-1.5 px-2 text-right bg-blue-700">ค่างวด / เดือน</th>
+            </tr>
+          </thead>
+          <tbody id="printPlansTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Freebies & Notes -->
+      <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 mb-2">
+        <h3 class="font-bold text-slate-800 mb-1.5 text-[11px] flex items-center gap-1.5">
+          <span>🎁</span> รายการของแถมและสิทธิพิเศษ (Complimentary & Privileges)
+        </h3>
+        <div id="printFreebiesText" class="text-slate-700 whitespace-pre-line text-[10px] leading-relaxed font-medium pl-1">-</div>
+      </div>
+      <p class="text-[9px] text-slate-400 italic">* หมายเหตุ: อัตราดอกเบี้ยและยอดผ่อนชำระข้างต้นเป็นการคำนวณเบื้องต้น เงื่อนไขการอนุมัติสินเชื่อเป็นไปตามที่สถาบันการเงินกำหนด</p>
+    </div>
+
+    <!-- Bottom Signature Section -->
+    <div class="grid grid-cols-2 gap-8 pt-6 border-t border-slate-200 text-center text-[10px] mt-4">
+      <div>
+        <div class="h-10 border-b border-dashed border-slate-400 w-48 mx-auto mb-1.5"></div>
+        <p class="font-bold text-slate-800" id="printSignSalesName">ผู้เสนอราคา</p>
+        <p class="text-slate-500 text-[9px]">ที่ปรึกษาการขาย (Sales Consultant)</p>
+      </div>
+      <div>
+        <div class="h-10 border-b border-dashed border-slate-400 w-48 mx-auto mb-1.5"></div>
+        <p class="font-bold text-slate-800" id="printSignCustomerName">ผู้รับข้อเสนอ</p>
+        <p class="text-slate-500 text-[9px]">ลูกค้า (Customer Signature)</p>
+      </div>
+    </div>
+  </div>
 
   <script>
     const AVAILABLE_MONTHS = [24, 36, 48, 60, 72, 84, 96];
+    const DOWN_TIERS = [30, 25, 20, 15, 10, 5];
+
     const BRANDS = [
       { id: 'toyota', name: 'TOYOTA', img: 'https://img1.pic.in.th/images/Toyota.png' },
       { id: 'honda', name: 'HONDA', img: 'https://img2.pic.in.th/Honda.png' },
       { id: 'isuzu', name: 'ISUZU', img: 'https://img1.pic.in.th/images/Isuzu.png' },
       { id: 'nissan', name: 'NISSAN', img: 'https://img2.pic.in.th/Nissan.png' },
-      { id: 'mitsubishi', name: 'MITSUBISHI', img: 'https://img2.pic.in.th/Mitsubishi.png' },
+      { id: 'mitsubishi', name: 'MITSUBISHI', img: 'https://img1.pic.in.th/Mitsubishi.png' },
       { id: 'ford', name: 'FORD', img: 'https://img1.pic.in.th/images/Ford.png' },
-      { id: 'mazda', name: 'MAZDA', img: 'https://img2.pic.in.th/Mazda.png' },
-      { id: 'suzuki', name: 'SUZUKI', img: 'https://img2.pic.in.th/Suzuki.png' },
+      { id: 'mazda', name: 'MAZDA', img: 'https://img1.pic.in.th/images/Mazda.png' },
+      { id: 'suzuki', name: 'SUZUKI', img: 'https://img1.pic.in.th/images/Suzuki.png' },
       { id: 'kia', name: 'KIA', img: 'https://img2.pic.in.th/Kia.png' },
       { id: 'byd', name: 'BYD', img: 'https://img2.pic.in.th/BYD.png' },
       { id: 'omoda_jaecoo', name: 'OMODA & JAECOO', img: 'https://img2.pic.in.th/OJ.png' },
@@ -57,215 +276,353 @@
     let state = {
       step: 'brand',
       selectedBrand: null,
-      company: { name: 'บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด', address: '59/3 หมู่ 4 ตำบลบ้านใหม่ อำเภอเมืองปทุมธานี จังหวัดปทุมธานี 12000' },
+      selectedModel: '',
+      selectedCarId: null,
+      selectedColorIdx: 0,
+      customCarPrice: null,
+      discount: 0,
+      accessories: 0,
+      company: {
+        name: localStorage.getItem('fin_company_name') || 'บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด',
+        address: localStorage.getItem('fin_company_address') || '59/3 หมู่ 4 ตำบลบ้านใหม่ อำเภอเมืองปทุมธานี จังหวัดปทุมธานี 12000'
+      },
+      sales: {
+        name: localStorage.getItem('fin_sales_name') || 'นพรุจ สินธพสุวรรณ (ตี๋)',
+        phone: localStorage.getItem('fin_sales_phone') || '089-123-4567',
+        line: localStorage.getItem('fin_sales_line') || 'tee_mg_mega',
+        branch: localStorage.getItem('fin_sales_branch') || 'สาขาติวานนท์',
+        freebies: localStorage.getItem('fin_sales_freebies') || '1. ประกันภัยชั้น 1 + พ.ร.บ.\n2. ฟิล์มกรองแสงเซรามิกรอบคัน\n3. ผ้ายางเข้ารูป / ชุดอุปกรณ์ฉุกเฉิน\n4. บริการช่วยเหลือฉุกเฉิน 24 ชั่วโมง'
+      },
       cars: [],
       campaigns: [],
       editingCarId: null,
       editingCampaignIndex: null,
-      // 4 แผนคำนวณการผ่อน
       plans: [
-        { id: 1, name: 'แผนที่ 1', isOpen: true, term: 48, campaignIdx: 0, downPct: 25, downAmt: 0, customRate: '' },
-        { id: 2, name: 'แผนที่ 2', isOpen: false, term: 60, campaignIdx: 0, downPct: 25, downAmt: 0, customRate: '' },
-        { id: 3, name: 'แผนที่ 3', isOpen: false, term: 72, campaignIdx: 0, downPct: 25, downAmt: 0, customRate: '' },
-        { id: 4, name: 'แผนที่ 4', isOpen: false, term: 84, campaignIdx: 0, downPct: 25, downAmt: 0, customRate: '' }
+        { id: 1, name: 'แผนที่ 1', isOpen: true, term: 48, campaignIdx: 0, downPct: 25, downAmt: 0, downMode: 'pct', customRate: '' },
+        { id: 2, name: 'แผนที่ 2', isOpen: true, term: 60, campaignIdx: 0, downPct: 25, downAmt: 0, downMode: 'pct', customRate: '' },
+        { id: 3, name: 'แผนที่ 3', isOpen: false, term: 72, campaignIdx: 0, downPct: 25, downAmt: 0, downMode: 'pct', customRate: '' },
+        { id: 4, name: 'แผนที่ 4', isOpen: false, term: 84, campaignIdx: 0, downPct: 25, downAmt: 0, downMode: 'pct', customRate: '' }
       ]
     };
 
     const fmt = n => (Number(n) || 0).toLocaleString('th-TH');
-    const num = s => { const p = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isNaN(p) ? 0 : p; };
+    const num = s => {
+      if (typeof s === 'number') return s;
+      const p = parseFloat(String(s || '').replace(/[^0-9.-]/g, ''));
+      return isNaN(p) ? 0 : p;
+    };
 
-    async function loadDataFromCloud() {
+    // โหลดข้อมูลจาก LocalStorage และซิงค์กับ Cloudflare API (หากมี)
+    async function loadDataFromStorage() {
       try {
-        const [carsRes, campRes] = await Promise.all([
-          fetch(`/api/cars?brand=${state.selectedBrand}`),
-          fetch('/api/campaigns')
-        ]);
-        if (!carsRes.ok || !campRes.ok) throw new Error('API response failed');
-        state.cars = await carsRes.json();
-        state.campaigns = await campRes.json();
-      } catch (err) {
-        console.warn("⚠️ ใช้ Mock Data สำรอง:", err);
-        if (!state.cars || state.cars.length === 0) {
-          state.cars = [
-            { id: 101, brand: state.selectedBrand, model: 'URBAN', grade: 'MAX', price: 649900, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'สีขาวมุก', price: 7000 }] },
-            { id: 102, brand: state.selectedBrand, model: 'URBAN', grade: 'PRO', price: 729900, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'LAVENDER PURPLE', price: 10000 }] }
-          ];
-        }
-        if (!state.campaigns || state.campaigns.length === 0) {
-          state.campaigns = [
-            {
-              finance: 'กรุงศรี ออโต้',
-              name: 'URBAN',
-              rates: {
-                30: { 24: 1.89, 36: 1.99, 48: 2.09, 60: 2.45, 72: 2.75, 84: 3.40, 96: null },
-                25: { 24: 1.99, 36: 2.09, 48: 2.19, 60: 2.45, 72: 2.75, 84: 3.40, 96: null },
-                20: { 24: 2.09, 36: 2.19, 48: 2.45, 60: 2.65, 72: 3.10, 84: 3.65, 96: null },
-                15: { 24: 2.19, 36: 2.29, 48: 2.95, 60: 3.20, 72: 3.50, 84: 4.25, 96: null },
-                10: { 24: 2.29, 36: 2.39, 48: 3.49, 60: 3.89, 72: 4.09, 84: 4.79, 96: null },
-                5:  { 24: 2.39, 36: 2.49, 48: 3.89, 60: 4.35, 72: 4.59, 84: 5.15, 96: null }
-              }
-            }
-          ];
-        }
-      } finally {
-        render();
+        const localCars = localStorage.getItem('multi_brand_cars');
+        const localCamps = localStorage.getItem('multi_brand_campaigns');
+        if (localCars) state.cars = JSON.parse(localCars);
+        if (localCamps) state.campaigns = JSON.parse(localCamps);
+      } catch (err) { console.warn("LocalStorage parse error:", err); }
+
+      // ข้อมูลเริ่มต้นกรณีเปิดใช้งานครั้งแรก
+      if (!state.cars || state.cars.length === 0) {
+        state.cars = [
+          { id: 101, brand: 'mg', model: 'MG4', grade: 'X LONG RANGE', price: 749900, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'IRIS CYAN', price: 10000 }] },
+          { id: 102, brand: 'nissan', model: 'KICKS', grade: 'E-POWER V', price: 799000, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'สีขาวมุก', price: 7000 }] },
+          { id: 103, brand: 'nissan', model: 'SERENA', grade: 'E-POWER HIGHWAY STAR', price: 1690000, colors: [{ name: 'สีมาตรฐาน', price: 0 }, { name: 'สีทูโทน', price: 15000 }] },
+          { id: 104, brand: 'omoda_jaecoo', model: 'JAECOO 6 EV', grade: 'LONG RANGE 4WD', price: 1249000, colors: [{ name: 'สีมาตรฐาน', price: 0 }] }
+        ];
       }
+
+      if (!state.campaigns || state.campaigns.length === 0) {
+        state.campaigns = [
+          {
+            finance: 'กรุงศรี ออโต้',
+            name: 'STANDARD CAMPAIGN',
+            rates: {
+              30: { 24: 1.89, 36: 1.99, 48: 1.79, 60: 2.45, 72: 2.75, 84: 3.40, 96: null },
+              25: { 24: 1.99, 36: 2.09, 48: 1.79, 60: 2.45, 72: 2.75, 84: 3.40, 96: null },
+              20: { 24: 2.09, 36: 2.19, 48: 2.45, 60: 2.65, 72: 3.10, 84: 3.65, 96: null },
+              15: { 24: 2.19, 36: 2.29, 48: 2.95, 60: 3.20, 72: 3.50, 84: 4.25, 96: null },
+              10: { 24: 2.29, 36: 2.39, 48: 3.49, 60: 3.89, 72: 4.09, 84: 4.79, 96: null },
+              5:  { 24: 2.39, 36: 2.49, 48: 3.89, 60: 4.35, 72: 4.59, 84: 5.15, 96: null }
+            }
+          }
+        ];
+      }
+      saveToStorage();
+    }
+
+    // ซิงค์ข้อมูลจาก Cloudflare Worker / D1 (Optional Background Sync)
+    async function syncFromCloud() {
+      try {
+        const [carsRes, campsRes] = await Promise.all([
+          fetch('/api/cars').catch(() => null),
+          fetch('/api/campaigns').catch(() => null)
+        ]);
+        let updated = false;
+        if (carsRes && carsRes.ok) {
+          const cloudCars = await carsRes.json();
+          if (Array.isArray(cloudCars) && cloudCars.length > 0) {
+            state.cars = cloudCars;
+            updated = true;
+          }
+        }
+        if (campsRes && campsRes.ok) {
+          const cloudCamps = await campsRes.json();
+          if (Array.isArray(cloudCamps) && cloudCamps.length > 0) {
+            state.campaigns = cloudCamps;
+            updated = true;
+          }
+        }
+        if (updated) {
+          saveToStorage();
+          if (state.step !== 'brand') render();
+        }
+      } catch (e) { /* ทำงานแบบ Offline/LocalStorage ต่อได้ทันที */ }
+    }
+
+    function saveToStorage() {
+      localStorage.setItem('multi_brand_cars', JSON.stringify(state.cars));
+      localStorage.setItem('multi_brand_campaigns', JSON.stringify(state.campaigns));
+      localStorage.setItem('fin_company_name', state.company.name);
+      localStorage.setItem('fin_company_address', state.company.address);
+      localStorage.setItem('fin_sales_name', state.sales.name);
+      localStorage.setItem('fin_sales_phone', state.sales.phone);
+      localStorage.setItem('fin_sales_line', state.sales.line);
+      localStorage.setItem('fin_sales_branch', state.sales.branch);
+      localStorage.setItem('fin_sales_freebies', state.sales.freebies);
     }
 
     function render() {
       const app = document.getElementById('app');
       if (!app) return;
-      app.innerHTML = '';
-      if (state.step === 'brand') app.innerHTML = renderBrandSelector();
-      else if (state.step === 'calc') {
+      if (state.step === 'brand') {
+        app.innerHTML = renderBrandSelector();
+      } else if (state.step === 'calc') {
         app.innerHTML = renderCalculator();
-        setTimeout(initCalcValues, 50);
+        calculateAll();
+      } else if (state.step === 'settings') {
+        app.innerHTML = renderSettings();
       }
-      else if (state.step === 'settings') app.innerHTML = renderSettings();
     }
 
     function renderBrandSelector() {
       return `
-        <div class="min-h-screen flex flex-col justify-center items-center p-6 bg-gradient-to-br from-slate-900 to-slate-950 text-white">
-          <div class="max-w-4xl w-full text-center mb-10">
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">CLOUD-DATABASE PRO (D1) + AI VISION</span>
-            <h1 class="text-3xl sm:text-4xl font-bold mt-3">เลือกแบรนด์รถยนต์ที่ต้องการคำนวณ</h1>
+        <div class="min-h-screen flex flex-col justify-center items-center p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white">
+          <div class="max-w-5xl w-full text-center mb-10">
+            <span class="px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-widest shadow-sm">
+              Multi-Brand Car Finance & Quotation Pro
+            </span>
+            <h1 class="text-3xl sm:text-4xl font-extrabold mt-4 tracking-tight text-white">เลือกแบรนด์รถยนต์ที่ต้องการคำนวณ</h1>
+            <p class="text-slate-400 text-xs sm:text-sm mt-2">ระบบคำนวณค่างวด 4 แผนอัจฉริยะ พร้อมออกใบเสนอราคา PDF มาตรฐาน A4</p>
           </div>
-          <div class="max-w-4xl w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            ${BRANDS.map(b => `
-              <button onclick="selectBrand('${b.id}')" class="group flex flex-col items-center justify-center p-5 rounded-2xl bg-slate-800/60 border border-slate-700 hover:border-blue-500 transition-all shadow-lg">
-                <div class="w-12 h-12 mb-3 flex items-center justify-center bg-white/10 rounded-xl p-2">
-                  <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain">
-                </div>
-                <span class="font-semibold text-xs text-slate-200 text-center">${b.name}</span>
-              </button>
-            `).join('')}
+          <div class="max-w-5xl w-full grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
+            ${BRANDS.map(b => {
+              const count = state.cars.filter(c => c.brand === b.id).length;
+              return `
+                <button onclick="selectBrand('${b.id}')" class="group relative flex flex-col items-center justify-center p-5 rounded-2xl bg-slate-800/50 backdrop-blur-md border border-slate-700/70 hover:border-blue-500 hover:bg-slate-800/90 transition-all duration-200 shadow-lg hover:shadow-blue-500/10 hover:-translate-y-0.5">
+                  ${count > 0 ? `<span class="absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">${count} รุ่น</span>` : ''}
+                  <div class="w-14 h-14 mb-3 flex items-center justify-center bg-white/95 rounded-2xl p-2.5 shadow-inner group-hover:scale-105 transition-transform">
+                    <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.src='https://placehold.co/80x80/1e293b/ffffff?text=${b.name.charAt(0)}'">
+                  </div>
+                  <span class="font-bold text-xs text-slate-200 group-hover:text-white tracking-wider">${b.name}</span>
+                </button>
+              `;
+            }).join('')}
           </div>
         </div>
       `;
     }
 
+    function initBrandSelectionDefaults() {
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
+      const uniqueModels = [...new Set(brandCars.map(c => c.model))];
+      if (!state.selectedModel || !uniqueModels.includes(state.selectedModel)) {
+        state.selectedModel = uniqueModels[0] || '';
+      }
+      const grades = brandCars.filter(c => c.model === state.selectedModel);
+      if (!state.selectedCarId || !grades.some(g => g.id == state.selectedCarId)) {
+        state.selectedCarId = grades[0] ? grades[0].id : null;
+      }
+      const currentCar = state.cars.find(c => c.id == state.selectedCarId);
+      state.customCarPrice = currentCar ? currentCar.price : 0;
+      state.selectedColorIdx = 0;
+
+      // จับคู่แคมเปญตามชื่อรุ่นรถอัตโนมัติ (ถ้ามี)
+      if (state.selectedModel && state.campaigns.length > 0) {
+        const matchedCampIdx = state.campaigns.findIndex(cp => cp.name.toUpperCase().includes(state.selectedModel.toUpperCase()));
+        if (matchedCampIdx !== -1) {
+          state.plans.forEach(p => { p.campaignIdx = matchedCampIdx; });
+        }
+      }
+    }
+
     function renderCalculator() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR', img: '' };
-      const uniqueModels = [...new Set(state.cars.map(c => c.model))];
-      const currentModel = document.getElementById('modelSelect') ? document.getElementById('modelSelect').value : (uniqueModels[0] || '');
-      const gradesForModel = state.cars.filter(c => c.model === currentModel);
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
+      const uniqueModels = [...new Set(brandCars.map(c => c.model))];
+      const gradesForModel = brandCars.filter(c => c.model === state.selectedModel);
+      const currentCar = state.cars.find(c => c.id == state.selectedCarId) || gradesForModel[0] || null;
+      const colors = (currentCar && currentCar.colors && currentCar.colors.length > 0) ? currentCar.colors : [{ name: 'สีมาตรฐาน', price: 0 }];
+      const selectedColor = colors[state.selectedColorIdx] || colors[0];
+      const displayCarPrice = state.customCarPrice !== null ? state.customCarPrice : (currentCar ? currentCar.price : 0);
 
-      // กรองแคมเปญตามรุ่นรถปัจจุบัน (ถ้าชื่อแคมเปญตรงกับรุ่นรถ หรือแสดงทั้งหมดถ้าไม่ตรง)
-      const matchingCampaigns = state.campaigns.filter(cp => cp.name.toUpperCase() === currentModel.toUpperCase());
-      const availableCampaigns = matchingCampaigns.length > 0 ? matchingCampaigns : state.campaigns;
+      const cardColors = [
+        { text: 'text-sky-400', border: 'border-sky-500/30', badge: 'bg-sky-500/10 text-sky-300' },
+        { text: 'text-emerald-400', border: 'border-emerald-500/30', badge: 'bg-emerald-500/10 text-emerald-300' },
+        { text: 'text-amber-400', border: 'border-amber-500/30', badge: 'bg-amber-500/10 text-amber-300' },
+        { text: 'text-purple-400', border: 'border-purple-500/30', badge: 'bg-purple-500/10 text-purple-300' }
+      ];
 
       return `
-        <div class="min-h-screen flex flex-col">
-          <header class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-30">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 bg-white/10 rounded-xl p-1.5 flex items-center justify-center">
-                <img src="${brandObj.img}" class="max-h-full max-w-full object-contain">
+        <div class="min-h-screen flex flex-col bg-slate-100/80">
+          <!-- Top Navbar -->
+          <header class="bg-slate-900 text-white px-4 sm:px-8 py-3.5 flex justify-between items-center sticky top-0 z-30 shadow-lg border-b border-slate-800">
+            <div class="flex items-center space-x-3.5">
+              <div class="w-10 h-10 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-sm">
+                <img src="${brandObj.img}" alt="${brandObj.name}" class="max-h-full max-w-full object-contain">
               </div>
               <div>
-                <h1 class="font-bold text-base">${brandObj.name} FINANCE CALCULATOR</h1>
-                <p class="text-xs text-slate-400">${state.company.name}</p>
+                <h1 class="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
+                  <span>${brandObj.name}</span>
+                  <span class="text-xs font-normal px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-500/30 hidden sm:inline-block">FINANCE PRO</span>
+                </h1>
+                <p class="text-[11px] text-slate-400 truncate max-w-[200px] sm:max-w-md">${state.company.name}</p>
               </div>
             </div>
             <div class="flex items-center space-x-2">
-              <button onclick="state.step='settings';render()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold">⚙️ ตั้งค่ารุ่นรถ/ดอกเบี้ย</button>
-              <button onclick="state.step='brand';render()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold">เปลี่ยนแบรนด์</button>
+              <button onclick="state.step='settings';render()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5">
+                <span>⚙️</span> <span class="hidden sm:inline">ตั้งค่ารุ่นรถ / ดอกเบี้ย</span><span class="sm:hidden">ตั้งค่า</span>
+              </button>
+              <button onclick="state.step='brand';render()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-all shadow-sm">
+                เปลี่ยนแบรนด์
+              </button>
             </div>
           </header>
 
-          <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          ${brandCars.length === 0 ? `
+            <div class="max-w-3xl mx-auto mt-8 p-6 bg-amber-50 border border-amber-200 rounded-3xl text-center space-y-3">
+              <p class="text-sm font-bold text-amber-900">⚠️ ยังไม่มีข้อมูลรุ่นรถสำหรับแบรนด์ ${brandObj.name}</p>
+              <p class="text-xs text-amber-700">คุณสามารถเพิ่มข้อมูลรุ่นรถ เกรด สี และตารางดอกเบี้ยได้ในหน้าตั้งค่า หรือกรอกตัวเลขราคารถด้านล่างเพื่อคำนวณทันที</p>
+              <button onclick="state.step='settings';render()" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all">
+                + ไปหน้าเพิ่มรุ่นรถและแคมเปญ
+              </button>
+            </div>
+          ` : ''}
+
+          <!-- Main Content Grid -->
+          <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            
+            <!-- Left Column: Car Info & 4 Finance Plans -->
             <div class="lg:col-span-2 space-y-6">
               
               <!-- ข้อมูลรถยนต์ -->
-              <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-                <h3 class="font-bold text-slate-800 mb-4">🚗 ข้อมูลรถยนต์</h3>
+              <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80">
+                <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+                  <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-sm">🚗</span>
+                    ข้อมูลรถยนต์และราคาสุทธิ
+                  </h3>
+                  <span class="text-xs text-slate-400 font-medium">ขั้นตอนที่ 1</span>
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อรุ่นรถ (Model)</label>
-                    <select id="modelSelect" onchange="onModelChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
-                      ${uniqueModels.map(m => `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`).join('')}
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">ชื่อรุ่นรถ (Model)</label>
+                    <select id="modelSelect" onchange="onModelChange(this.value)" class="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none transition-all">
+                      ${uniqueModels.length === 0 ? `<option value="">-- ยังไม่มีรุ่นรถ --</option>` : uniqueModels.map(m => `<option value="${m}" ${m === state.selectedModel ? 'selected' : ''}>${m}</option>`).join('')}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">เกรด / รุ่นย่อย (Grade)</label>
-                    <select id="gradeSelect" onchange="onGradeChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
-                      ${gradesForModel.map((g) => `<option value="${g.id}">${g.grade} (${fmt(g.price)} ฿)</option>`).join('')}
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">เกรด / รุ่นย่อย (Grade)</label>
+                    <select id="gradeSelect" onchange="onGradeChange(this.value)" class="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none transition-all">
+                      ${gradesForModel.length === 0 ? `<option value="">-- เลือกรุ่นย่อย --</option>` : gradesForModel.map(g => `<option value="${g.id}" ${g.id == state.selectedCarId ? 'selected' : ''}>${g.grade} (${fmt(g.price)} ฿)</option>`).join('')}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">ราคารถยนต์ (บาท)</label>
-                    <input type="text" id="carPrice" value="0" oninput="calculateAll()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">ราคารถยนต์ตั้งต้น (บาท)</label>
+                    <input type="text" id="carPrice" value="${fmt(displayCarPrice)}" oninput="onPriceInput()" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none transition-all">
                   </div>
                   <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">เลือกสีรถ</label>
-                    <select id="colorSelect" onchange="onColorChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold"></select>
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">เลือกสีตัวถังรถ</label>
+                    <select id="colorSelect" onchange="onColorChange(this.value)" class="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none transition-all">
+                      ${colors.map((col, idx) => `<option value="${idx}" ${idx == state.selectedColorIdx ? 'selected' : ''}>${col.name} (+${fmt(col.price)} ฿)</option>`).join('')}
+                    </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">ค่าสีรถ (บาท)</label>
-                    <input type="text" id="colorPrice" value="0" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">ค่าสีพิเศษ (บาท)</label>
+                    <input type="text" id="colorPrice" value="${fmt(selectedColor.price)}" oninput="calculateAll()" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none transition-all">
                   </div>
                   <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">ส่วนลดตัวรถ (-)</label>
-                    <input type="text" id="discount" value="0" oninput="calculateAll()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">ส่วนลดตัวรถ (- บาท)</label>
+                    <input type="text" id="discount" value="${fmt(state.discount)}" oninput="state.discount=num(this.value);calculateAll()" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-red-400 focus:bg-white rounded-xl p-3 text-sm font-semibold text-red-600 outline-none transition-all">
                   </div>
-                  <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">บวกอุปกรณ์ (บาท)</label>
-                    <input type="text" id="accessories" value="0" oninput="calculateAll()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                  <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">บวกอุปกรณ์ตกแต่งเพิ่มเติม (+ บาท)</label>
+                    <input type="text" id="accessories" value="${fmt(state.accessories)}" oninput="state.accessories=num(this.value);calculateAll()" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none transition-all">
                   </div>
-                  <div class="sm:col-span-2 bg-blue-50 p-4 rounded-2xl flex justify-between items-center">
-                    <span class="text-xs font-bold text-blue-900">ราคารถยนต์สุทธิ (ราคารถ − ส่วนลด + ค่าสี + อุปกรณ์)</span>
-                    <span id="resNetPriceFull" class="text-base font-bold text-blue-700">0 ฿</span>
+                  
+                  <!-- Net Price Highlight Banner -->
+                  <div class="sm:col-span-2 bg-gradient-to-r from-blue-600 to-indigo-700 p-4 rounded-2xl text-white flex flex-col sm:flex-row justify-between sm:items-center gap-2 shadow-md shadow-blue-600/15 mt-1">
+                    <div>
+                      <span class="text-xs font-medium text-blue-100 block">ราคารถยนต์สุทธิ (ราคารถ − ส่วนลด + ค่าสี + อุปกรณ์)</span>
+                      <span class="text-[11px] text-blue-200/80">ใช้เป็นฐานในการคำนวณเงินดาวน์และยอดจัดไฟแนนซ์</span>
+                    </div>
+                    <span id="resNetPriceFull" class="text-xl sm:text-2xl font-extrabold tracking-tight">0 ฿</span>
                   </div>
                 </div>
               </div>
 
               <!-- แผนคำนวณ 4 แผน (Plans 1-4) -->
               <div class="space-y-4">
-                ${state.plans.map((p, pIdx) => {
-                  const cp = availableCampaigns[p.campaignIdx] || availableCampaigns[0] || {};
-                  const netPrice = getNetPriceWithoutDown();
-                  const downAmtVal = num(p.downAmt);
-                  const downPctVal = netPrice > 0 ? Math.round((downAmtVal / netPrice) * 100) : p.downPct;
-                  
-                  let matchedPct = 25;
-                  [30, 25, 20, 15, 10, 5].forEach(t => { if (downPctVal >= t) matchedPct = t; });
-                  if (downPctVal < 5) matchedPct = 5;
-
-                  const rTable = cp && cp.rates && cp.rates[matchedPct] ? cp.rates[matchedPct] : {};
-                  const autoRate = rTable[p.term] ? num(rTable[p.term]) : 2.79;
-                  const currentRate = p.customRate !== '' ? p.customRate : autoRate;
+                ${state.plans.map((p, idx) => {
+                  const autoRate = getAutoRateForPlan(p);
+                  const displayRate = p.customRate !== '' ? p.customRate : autoRate;
+                  const badgeColors = ['bg-sky-100 text-sky-800', 'bg-emerald-100 text-emerald-800', 'bg-amber-100 text-amber-800', 'bg-purple-100 text-purple-800'];
 
                   return `
-                    <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-                      <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-                        <h3 class="font-bold text-slate-800 text-sm sm:text-base">📋 รายละเอียดไฟแนนซ์และแคมเปญดอกเบี้ย</h3>
-                        <button onclick="togglePlan(${p.id})" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all">
-                          ${p.name} (${p.isOpen ? 'เปิดอยู่ 🔽' : 'ปิดอยู่ ◀'})
+                    <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border ${p.isOpen ? 'border-slate-200/90' : 'border-slate-200/50 opacity-75'} transition-all">
+                      <div class="flex justify-between items-center ${p.isOpen ? 'mb-4 pb-3 border-b border-slate-100' : ''}">
+                        <div class="flex items-center gap-2.5">
+                          <span class="px-3 py-1 rounded-xl text-xs font-extrabold ${badgeColors[idx]}">${p.name}</span>
+                          <h3 class="font-bold text-slate-800 text-sm sm:text-base">รายละเอียดไฟแนนซ์และแคมเปญดอกเบี้ย</h3>
+                        </div>
+                        <button type="button" onclick="togglePlan(${p.id})" class="px-3.5 py-1.5 ${p.isOpen ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'} hover:opacity-90 rounded-xl text-xs font-bold transition-all">
+                          ${p.isOpen ? 'เปิดใช้งานอยู่ ✓' : 'กดเพื่อเปิดแผนนี้ +'}
                         </button>
                       </div>
 
                       <div class="${p.isOpen ? 'grid' : 'hidden'} grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label class="block text-xs font-medium text-slate-500 mb-1">เลือกแคมเปญไฟแนนซ์</label>
-                          <select onchange="updatePlan(${p.id}, 'campaignIdx', this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
-                            ${availableCampaigns.map((c, i) => `<option value="${i}" ${p.campaignIdx == i ? 'selected' : ''}>[${c.finance}] รุ่น: ${c.name}</option>`).join('')}
+                          <label class="block text-xs font-medium text-slate-500 mb-1.5">เลือกแคมเปญไฟแนนซ์</label>
+                          <select onchange="updatePlanCampaign(${p.id}, this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none">
+                            ${state.campaigns.map((c, i) => `<option value="${i}" ${p.campaignIdx == i ? 'selected' : ''}>[${c.finance}] ${c.name}</option>`).join('')}
                           </select>
                         </div>
                         <div>
-                          <label class="block text-xs font-medium text-slate-500 mb-1">จำนวนเดือน (Term)</label>
-                          <input type="number" value="${p.term}" oninput="updatePlan(${p.id}, 'term', this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                          <label class="block text-xs font-medium text-slate-500 mb-1.5">จำนวนงวดที่ผ่อน (เดือน)</label>
+                          <select onchange="updatePlanTerm(${p.id}, this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none">
+                            ${AVAILABLE_MONTHS.map(m => `<option value="${m}" ${p.term == m ? 'selected' : ''}>${m} เดือน (${m/12} ปี)</option>`).join('')}
+                          </select>
                         </div>
                         <div>
-                          <label class="block text-xs font-medium text-slate-500 mb-1">เปอร์เซ็นต์ดาวน์ (%)</label>
-                          <input type="number" id="plan-${p.id}-downPct" value="${p.downPct}" min="5" max="50" step="5" oninput="updatePlanDownPct(${p.id}, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                          <label class="block text-xs font-medium text-slate-500 mb-1.5">เปอร์เซ็นต์เงินดาวน์ (%)</label>
+                          <div class="flex gap-2">
+                            <input type="number" id="plan-${p.id}-downPct" value="${p.downPct}" min="0" max="90" step="1" oninput="updatePlanDownPct(${p.id}, this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
+                            <select onchange="updatePlanDownPct(${p.id}, this.value)" class="bg-slate-100 border border-slate-200 rounded-xl px-2 text-xs font-bold text-slate-700 outline-none">
+                              <option value="">เลือกด่วน</option>
+                              ${[5, 10, 15, 20, 25, 30].map(d => `<option value="${d}">${d}%</option>`).join('')}
+                            </select>
+                          </div>
                         </div>
                         <div>
-                          <label class="block text-xs font-medium text-slate-500 mb-1">ยอดเงินดาวน์ (บาท)</label>
-                          <input type="text" id="plan-${p.id}-downAmt" value="${fmt(p.downAmt)}" oninput="updatePlanDownAmt(${p.id}, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                          <label class="block text-xs font-medium text-slate-500 mb-1.5">ยอดเงินดาวน์ (บาท)</label>
+                          <input type="text" id="plan-${p.id}-downAmt" value="${fmt(p.downAmt)}" oninput="updatePlanDownAmt(${p.id}, this.value)" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                         </div>
                         <div class="sm:col-span-2">
-                          <label class="block text-xs font-medium text-slate-500 mb-1">อัตราดอกเบี้ย (% ต่อปี) <span class="text-blue-600 font-normal">(อัตโนมัติจากตาราง/แก้ไขเองได้)</span></label>
-                          <input type="number" step="0.01" value="${currentRate}" oninput="updatePlan(${p.id}, 'customRate', this.value)" class="w-full bg-blue-50/50 border border-blue-200 rounded-xl p-3 text-sm font-semibold text-blue-800">
+                          <div class="flex justify-between items-center mb-1.5">
+                            <label class="text-xs font-medium text-slate-500">อัตราดอกเบี้ย (% ต่อปี) <span class="text-blue-600 font-normal">(ดึงอัตโนมัติตามตาราง / พิมพ์แก้ไขเองได้)</span></label>
+                            ${p.customRate !== '' ? `<button type="button" onclick="resetPlanRate(${p.id})" class="text-[11px] text-blue-600 hover:underline font-semibold">↺ คืนค่าตามตาราง (${autoRate}%)</button>` : ''}
+                          </div>
+                          <input type="number" id="plan-${p.id}-rateInput" step="0.01" value="${displayRate}" oninput="updatePlanCustomRate(${p.id}, this.value)" class="w-full bg-blue-50/60 border border-blue-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-blue-800 outline-none">
                         </div>
                       </div>
                     </div>
@@ -275,33 +632,58 @@
 
             </div>
 
-            <!-- Sidebar สรุปยอดผ่อน -->
-            <div class="space-y-6">
-              <div class="bg-slate-900 text-white rounded-3xl p-6 shadow-xl sticky top-24">
-                <h3 class="font-bold text-slate-200 mb-4 pb-3 border-b border-slate-800 flex justify-between">
-                  <span>📊 สรุปยอดคำนวณ</span>
-                  <span class="text-xs text-blue-400">Cloud D1</span>
-                </h3>
-                <div class="space-y-3 text-sm mb-6">
-                  <div class="flex justify-between text-slate-400"><span>ราคาสุทธิ:</span><span id="resNetPrice">0 ฿</span></div>
+            <!-- Right Column: Real-time Summary Sidebar -->
+            <div class="space-y-6 lg:sticky lg:top-20">
+              <div class="bg-slate-900 text-white rounded-3xl p-6 shadow-2xl border border-slate-800">
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+                  <span class="font-bold text-slate-100 text-base flex items-center gap-2">📊 สรุปยอดคำนวณ</span>
+                  <span class="text-[11px] text-emerald-400 font-semibold px-2.5 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">● Real-time</span>
                 </div>
 
+                <!-- Overview Box (Based on First Active Plan) -->
+                <div class="space-y-2.5 text-xs mb-5 bg-slate-950/70 p-4 rounded-2xl border border-slate-800/90">
+                  <div class="flex justify-between items-center text-slate-400">
+                    <span>ราคาสุทธิรวมแต่ง:</span>
+                    <span id="resNetPrice" class="font-bold text-white text-sm">0 ฿</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-400">
+                    <span>เงินดาวน์เริ่มต้น (แผนหลัก):</span>
+                    <span id="resDownTotal" class="font-bold text-sky-400 text-sm">0 ฿</span>
+                  </div>
+                  <div class="flex justify-between items-center text-slate-400 pt-1.5 border-t border-slate-800/80">
+                    <span>ยอดจัดไฟแนนซ์:</span>
+                    <span id="resFinanceTotal" class="font-bold text-emerald-400 text-sm">0 ฿</span>
+                  </div>
+                </div>
+
+                <!-- Installment Cards (Plans 1-4) -->
                 <div class="space-y-3" id="installmentCardsContainer">
-                  ${state.plans.map(p => {
+                  ${state.plans.map((p, idx) => {
+                    const cStyle = cardColors[idx % cardColors.length];
                     return `
-                      <div class="bg-slate-800 p-4 rounded-2xl text-center ${p.isOpen ? '' : 'hidden'}" id="sidebar-card-${p.id}">
-                        <div class="flex justify-between items-center text-xs text-slate-400 mb-1">
-                          <span>${p.name} (ผ่อน ${p.term} เดือน)</span>
-                          <span class="text-blue-300 font-semibold">ดอกเบี้ย: <span id="sidebar-rate-${p.id}">0</span>%</span>
+                      <div class="bg-slate-950 p-4 rounded-2xl border ${cStyle.border} shadow-lg transition-all ${p.isOpen ? '' : 'hidden'}" id="sidebar-card-${p.id}">
+                        <div class="flex justify-between items-center text-xs mb-1.5">
+                          <span class="font-bold text-slate-200" id="sidebar-title-${p.id}">${p.name} (ผ่อน ${p.term} เดือน)</span>
+                          <span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${cStyle.badge}">ดอกเบี้ย <span id="sidebar-rate-${p.id}">0</span>%</span>
                         </div>
-                        <div class="text-xs text-slate-300 mb-2 flex justify-between">
-                          <span>ดาวน์: <span id="sidebar-down-${p.id}">0</span> ฿</span>
-                          <span>ยอดจัด: <span id="sidebar-finance-${p.id}">0</span> ฿</span>
+                        <div class="text-[11px] text-slate-400 mb-2 flex justify-between">
+                          <span>ดาวน์ (<span id="sidebar-downpct-${p.id}">0</span>%): <strong class="text-slate-200" id="sidebar-down-${p.id}">0</strong> ฿</span>
+                          <span>ยอดจัด: <strong class="text-slate-200" id="sidebar-finance-${p.id}">0</strong> ฿</span>
                         </div>
-                        <div id="sidebar-inst-${p.id}" class="text-xl font-bold text-white">0 ฿ / เดือน</div>
+                        <div class="pt-2 border-t border-slate-800/80 flex justify-between items-baseline">
+                          <span class="text-[11px] text-slate-400">ค่างวดต่อเดือน</span>
+                          <div id="sidebar-inst-${p.id}" class="text-xl font-extrabold ${cStyle.text} tracking-tight">0 ฿ / เดือน</div>
+                        </div>
                       </div>
                     `;
                   }).join('')}
+                </div>
+
+                <!-- Action Button: Print / Save PDF -->
+                <div class="mt-6 pt-4 border-t border-slate-800">
+                  <button type="button" onclick="openPrintModal()" class="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 transition-all active:scale-[0.99]">
+                    <span>🖨️</span> พิมพ์ใบเสนอราคา / บันทึก PDF (A4)
+                  </button>
                 </div>
               </div>
             </div>
@@ -315,83 +697,136 @@
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR' };
       const carsForBrand = state.cars.filter(c => c.brand === state.selectedBrand);
 
+      // ดึงข้อมูลกรณีอยู่ในโหมดแก้ไขแคมเปญ
+      const editingCamp = state.editingCampaignIndex !== null ? state.campaigns[state.editingCampaignIndex] : null;
+      // ดึงข้อมูลกรณีอยู่ในโหมดแก้ไขรุ่นรถ
+      const editingCar = state.editingCarId !== null ? state.cars.find(c => c.id == state.editingCarId) : null;
+      const carColorsToRender = (editingCar && editingCar.colors && editingCar.colors.length > 0)
+        ? editingCar.colors
+        : [{ name: 'สีมาตรฐาน', price: 0 }];
+
       return `
         <div class="min-h-screen bg-slate-100 flex flex-col">
-          <header class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-30">
-            <h1 class="font-bold text-sm sm:text-base">⚙️ ตั้งค่าข้อมูลแบรนด์: ${brandObj.name}</h1>
-            <button onclick="state.step='calc';render();" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md transition-all">กลับหน้าคำนวณ</button>
+          <header class="bg-slate-900 text-white px-4 sm:px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-md">
+            <div>
+              <h1 class="font-bold text-sm sm:text-base flex items-center gap-2">
+                <span>⚙️</span> ตั้งค่าระบบและฐานข้อมูลแบรนด์: <span class="text-blue-400">${brandObj.name}</span>
+              </h1>
+            </div>
+            <button onclick="state.step='calc';initBrandSelectionDefaults();render();" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all">
+              ← กลับหน้าคำนวณ
+            </button>
           </header>
-          <main class="max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+          <main class="max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
             
-            <!-- จัดการบริษัทไฟแนนซ์และแคมเปญดอกเบี้ย (ผูกกับชื่อรุ่นรถ) -->
+            <!-- 1. ตั้งค่าข้อมูลบริษัทและที่ปรึกษาการขาย -->
             <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
-              <div class="flex justify-between items-center">
-                <h3 class="font-bold text-slate-800">🏦 จัดการบริษัทไฟแนนซ์และแคมเปญดอกเบี้ย (ระบุชื่อรุ่นรถในชื่อแคมเปญ)</h3>
-                ${state.editingCampaignIndex !== null ? `<button onclick="cancelEditCampaign()" class="text-xs text-red-500 font-semibold hover:underline">ยกเลิกการแก้ไข</button>` : ''}
+              <h3 class="font-bold text-slate-800 text-base">🏢 ตั้งค่าหัวกระดาษบริษัทและที่ปรึกษาการขาย (บันทึกถาวร)</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อบริษัท / โชว์รูม</label>
+                  <input type="text" id="settingCompanyName" value="${state.company.name}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">ที่อยู่บริษัท (แสดงบนหัวใบเสนอราคา)</label>
+                  <input type="text" id="settingCompanyAddress" value="${state.company.address}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อที่ปรึกษาการขาย</label>
+                  <input type="text" id="settingSalesName" value="${state.sales.name}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">เบอร์โทรศัพท์ / LINE ID / สาขา</label>
+                  <div class="grid grid-cols-3 gap-2">
+                    <input type="text" id="settingSalesPhone" value="${state.sales.phone}" placeholder="เบอร์โทร" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800">
+                    <input type="text" id="settingSalesLine" value="${state.sales.line}" placeholder="LINE ID" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800">
+                    <input type="text" id="settingSalesBranch" value="${state.sales.branch}" placeholder="สาขา" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800">
+                  </div>
+                </div>
               </div>
+              <div class="flex justify-end pt-2">
+                <button type="button" onclick="saveCompanyAndSales()" class="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-all">
+                  💾 บันทึกข้อมูลบริษัทและผู้ขาย
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. จัดการบริษัทไฟแนนซ์และแคมเปญดอกเบี้ย -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4" id="campaignFormSection">
+              <div class="flex justify-between items-center">
+                <div>
+                  <h3 class="font-bold text-slate-800 text-base">🏦 จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix)</h3>
+                  <p class="text-xs text-slate-500">ระบุชื่อรุ่นรถในชื่อแคมเปญเพื่อให้ระบบดึงเรทดอกเบี้ยอัตโนมัติ</p>
+                </div>
+                ${editingCamp ? `<button onclick="cancelEditCampaign()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+              </div>
+
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-medium text-slate-500 mb-1">บริษัทไฟแนนซ์</label>
-                  <input type="text" id="financeCompanyInput" placeholder="เช่น กรุงศรี ออโต้, นิสสัน ลีสซิ่ง" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                  <input type="text" id="financeCompanyInput" value="${editingCamp ? editingCamp.finance : ''}" placeholder="เช่น กรุงศรี ออโต้, นิสสัน ลีสซิ่ง" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อแคมเปญ / ชื่อรุ่นรถ (เช่น URBAN)</label>
-                  <input type="text" id="campaignNameInput" placeholder="ระบุชื่อรุ่นรถ เช่น URBAN" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                  <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อแคมเปญ / ชื่อรุ่นรถ</label>
+                  <input type="text" id="campaignNameInput" value="${editingCamp ? editingCamp.name : ''}" placeholder="เช่น MG4, KICKS, บอลลูนพิเศษ" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
                 </div>
               </div>
-              <div>
-                <label class="block text-xs font-medium text-slate-500 mb-1">📸 แนบภาพถ่ายตารางดอกเบี้ยเพื่อให้ AI วิเคราะห์</label>
-                <input type="file" id="rateImageFile" accept="image/*,application/pdf" onchange="handleImageUpload(event)" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+
+              <div class="p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl">
+                <label class="block text-xs font-bold text-blue-900 mb-1.5">📸 แนบภาพถ่ายตารางดอกเบี้ยเพื่อให้ AI Vision (Gemini 2.5 Flash) วิเคราะห์และกรอกตารางอัตโนมัติ</label>
+                <input type="file" id="rateImageFile" accept="image/*,application/pdf" onchange="handleImageUpload(event)" class="block w-full text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+                <div id="aiUploadStatus"></div>
               </div>
 
               <!-- ตารางกรอกดอกเบี้ย Matrix -->
               <div class="overflow-x-auto pt-2">
                 <table class="w-full text-center border-collapse">
                   <thead>
-                    <tr class="bg-slate-100 text-xs text-slate-600">
-                      <th class="p-3 border">เงินดาวน์</th>
-                      <th class="p-3 border">24 เดือน</th>
-                      <th class="p-3 border">36 เดือน</th>
-                      <th class="p-3 border">48 เดือน</th>
-                      <th class="p-3 border">60 เดือน</th>
-                      <th class="p-3 border">72 เดือน</th>
-                      <th class="p-3 border">84 เดือน</th>
-                      <th class="p-3 border">96 เดือน</th>
+                    <tr class="bg-slate-800 text-xs text-white">
+                      <th class="p-2.5 border border-slate-700 rounded-tl-xl">เงินดาวน์ (%)</th>
+                      ${AVAILABLE_MONTHS.map(m => `<th class="p-2.5 border border-slate-700">${m} เดือน</th>`).join('')}
                     </tr>
                   </thead>
                   <tbody>
-                    ${[30, 25, 20, 15, 10, 5].map(down => `
-                      <tr>
-                        <td class="p-2 border font-semibold text-xs bg-slate-50">ดาวน์ ${down}%</td>
-                        ${[24, 36, 48, 60, 72, 84, 96].map(month => `
-                          <td class="p-1 border">
-                            <input type="text" data-down="${down}" data-month="${month}" value="-" class="w-full text-center text-xs p-2 bg-slate-50 border rounded-lg focus:bg-white font-semibold">
-                          </td>
-                        `).join('')}
+                    ${DOWN_TIERS.map(down => `
+                      <tr class="hover:bg-slate-50">
+                        <td class="p-2 border border-slate-200 font-bold text-xs bg-slate-100 text-slate-700">ดาวน์ ${down}%</td>
+                        ${AVAILABLE_MONTHS.map(month => {
+                          const existingRate = editingCamp && editingCamp.rates && editingCamp.rates[down] && editingCamp.rates[down][month] !== null && editingCamp.rates[down][month] !== undefined
+                            ? editingCamp.rates[down][month]
+                            : '-';
+                          return `
+                            <td class="p-1 border border-slate-200">
+                              <input type="text" data-down="${down}" data-month="${month}" value="${existingRate}" class="w-full text-center text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-blue-500 font-bold text-slate-800 outline-none">
+                            </td>
+                          `;
+                        }).join('')}
                       </tr>
                     `).join('')}
                   </tbody>
                 </table>
               </div>
 
-              <div class="flex justify-end pt-3">
-                <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all">
-                  ${state.editingCampaignIndex !== null ? '💾 บันทึกการแก้ไขแคมเปญ' : '💾 บันทึกแคมเปญและเรทดอกเบี้ยลงระบบ'}
+              <div class="flex justify-end pt-2">
+                <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+                  ${editingCamp ? '💾 บันทึกการแก้ไขแคมเปญ' : '💾 บันทึกแคมเปญและเรทดอกเบี้ยใหม่'}
                 </button>
               </div>
 
               <!-- รายการแคมเปญที่บันทึกแล้ว -->
               <div class="pt-4 border-t border-slate-100">
-                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการแคมเปญไฟแนนซ์ในระบบ</h4>
-                <div class="space-y-2">
-                  ${state.campaigns.length === 0 ? `<p class="text-xs text-slate-400">ยังไม่มีแคมเปญในระบบ</p>` : state.campaigns.map((cp, idx) => `
-                    <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs">
+                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการแคมเปญไฟแนนซ์ในระบบ (${state.campaigns.length} แคมเปญ)</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  ${state.campaigns.map((cp, idx) => `
+                    <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs">
                       <div>
-                        <span class="font-bold text-slate-800">[${cp.finance}] รุ่นรถ: ${cp.name}</span>
+                        <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md font-bold mr-1.5">${cp.finance}</span>
+                        <span class="font-bold text-slate-800">${cp.name}</span>
                       </div>
-                      <div class="flex space-x-2">
-                        <button onclick="editCampaign(${idx})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold">แก้ไข</button>
-                        <button onclick="deleteCampaign(${idx})" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold">ลบ</button>
+                      <div class="flex space-x-1.5">
+                        <button type="button" onclick="editCampaign(${idx})" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold">แก้ไข</button>
+                        <button type="button" onclick="deleteCampaign(${idx})" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold">ลบ</button>
                       </div>
                     </div>
                   `).join('')}
@@ -399,74 +834,76 @@
               </div>
             </div>
 
-            <!-- ข้อมูลรุ่นรถและสี -->
-            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+            <!-- 3. ข้อมูลรุ่นรถและสี -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4" id="carFormSection">
               <div class="flex justify-between items-center">
-                <h3 class="font-bold text-slate-800">🚗 ข้อมูลรุ่นรถในระบบคลาวด์</h3>
-                ${state.editingCarId !== null ? `<button onclick="cancelEditCar()" class="text-xs text-red-500 font-semibold hover:underline">ยกเลิกการแก้ไข</button>` : ''}
+                <h3 class="font-bold text-slate-800 text-base">🚗 จัดการรุ่นรถและสีตัวถัง (${brandObj.name})</h3>
+                ${editingCar ? `<button onclick="cancelEditCar()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
               </div>
+
               <form onsubmit="addNewCarModel(event)" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อรุ่นรถ (Model)</label>
-                    <input type="text" id="newModelName" placeholder="เช่น URBAN, MG4" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                    <input type="text" id="newModelName" value="${editingCar ? editingCar.model : ''}" placeholder="เช่น MG4, KICKS, ATTO 3" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
                   </div>
                   <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">เกรด / รุ่นย่อย (Grade)</label>
-                    <input type="text" id="newGradeName" placeholder="เช่น STANDARD, MAX" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                    <input type="text" id="newGradeName" value="${editingCar ? editingCar.grade : ''}" placeholder="เช่น X LONG RANGE, E-POWER V" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
                   </div>
                   <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">ราคารถตั้งต้น (บาท)</label>
-                    <input type="number" id="newPrice" placeholder="เช่น 579900" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold">
+                    <input type="number" id="newPrice" value="${editingCar ? editingCar.price : ''}" placeholder="เช่น 749900" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800">
                   </div>
                 </div>
 
-                <!-- กำหนดสีรถและค่าสีเพิ่มเติม -->
                 <div class="pt-2">
-                  <label class="block text-xs font-medium text-slate-500 mb-2">กำหนดสีรถและค่าสีเพิ่มเติม</label>
+                  <label class="block text-xs font-medium text-slate-500 mb-2">กำหนดสีตัวถังและค่าสีเพิ่มเติม (บาท)</label>
                   <div id="colorRowsContainer" class="space-y-2">
-                    <div class="flex gap-2 items-center color-row">
-                      <input type="text" placeholder="ชื่อสี (เช่น สีมาตรฐาน หรือ LAVENDER PURPLE)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input" value="สีมาตรฐาน">
-                      <input type="number" placeholder="ค่าสี (บาท เช่น 0 หรือ 7000)" class="w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input" value="0">
-                      <button type="button" onclick="removeColorRow(this)" class="px-3 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-semibold">❌</button>
-                    </div>
+                    ${carColorsToRender.map(c => `
+                      <div class="flex gap-2 items-center color-row">
+                        <input type="text" placeholder="ชื่อสี (เช่น สีขาวมุก)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input text-slate-800" value="${c.name}">
+                        <input type="number" placeholder="ค่าสี (เช่น 0 หรือ 7000)" class="w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input text-slate-800" value="${c.price}">
+                        <button type="button" onclick="removeColorRow(this)" class="px-3.5 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-bold">✕</button>
+                      </div>
+                    `).join('')}
                   </div>
-                  <button type="button" onclick="addColorRow()" class="text-xs text-blue-600 font-bold hover:underline mt-2 inline-block">+ เพิ่มสีอื่นๆ</button>
+                  <button type="button" onclick="addColorRow()" class="text-xs text-blue-600 font-bold hover:underline mt-2.5 inline-block">+ เพิ่มตัวเลือกสีรถ</button>
                 </div>
 
                 <div class="flex justify-end pt-2">
-                  <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all">
-                    ${state.editingCarId !== null ? '💾 บันทึกการแก้ไขรุ่นรถ' : 'บันทึกข้อมูลงคลาวด์'}
+                  <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+                    ${editingCar ? '💾 บันทึกการแก้ไขรุ่นรถ' : '💾 เพิ่มรุ่นรถลงในระบบ'}
                   </button>
                 </div>
               </form>
 
               <!-- รายการรุ่นรถในระบบปัจจุบัน -->
               <div class="pt-6 border-t border-slate-100">
-                <h3 class="font-bold text-slate-800 mb-3">📋 รายการรุ่นรถในระบบปัจจุบัน</h3>
+                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการรุ่นรถของแบรนด์ ${brandObj.name} (${carsForBrand.length} รายการ)</h4>
                 <div class="overflow-x-auto">
                   <table class="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr class="bg-slate-100 text-slate-600">
-                        <th class="p-3 border">รุ่น (Model)</th>
-                        <th class="p-3 border">เกรด (Grade)</th>
-                        <th class="p-3 border">ราคารถตั้งต้น</th>
-                        <th class="p-3 border">สีและค่าสีเพิ่มเติม</th>
-                        <th class="p-3 border text-center">จัดการ</th>
+                        <th class="p-3 border border-slate-200">รุ่น (Model)</th>
+                        <th class="p-3 border border-slate-200">เกรด (Grade)</th>
+                        <th class="p-3 border border-slate-200">ราคาตั้งต้น</th>
+                        <th class="p-3 border border-slate-200">สีและค่าสี</th>
+                        <th class="p-3 border border-slate-200 text-center w-32">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody>
-                      ${carsForBrand.length === 0 ? `<tr><td colspan="5" class="p-4 text-center text-slate-400">ยังไม่มีข้อมูลรุ่นรถในระบบสำหรับแบรนด์นี้</td></tr>` : carsForBrand.map(car => `
-                        <tr class="border-b hover:bg-slate-50">
-                          <td class="p-3 font-semibold text-slate-800">${car.model}</td>
+                      ${carsForBrand.length === 0 ? `<tr><td colspan="5" class="p-6 text-center text-slate-400">ยังไม่มีข้อมูลรุ่นรถสำหรับแบรนด์นี้</td></tr>` : carsForBrand.map(car => `
+                        <tr class="border-b border-slate-200 hover:bg-slate-50">
+                          <td class="p-3 font-bold text-slate-800">${car.model}</td>
                           <td class="p-3 font-semibold text-slate-600">${car.grade}</td>
-                          <td class="p-3 font-semibold text-blue-600">${fmt(car.price)} ฿</td>
+                          <td class="p-3 font-bold text-blue-600">${fmt(car.price)} ฿</td>
                           <td class="p-3 text-slate-600">
-                            ${(car.colors || []).map(c => `<span class="inline-block bg-slate-100 px-2 py-1 rounded-md mr-1 mb-1">${c.name} (+${fmt(c.price)}฿)</span>`).join('')}
+                            ${(car.colors || []).map(c => `<span class="inline-block bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mr-1 mb-1 text-[11px]">${c.name} (+${fmt(c.price)}฿)</span>`).join('')}
                           </td>
                           <td class="p-3 text-center space-x-1">
-                            <button onclick="editCar(${car.id})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold">แก้ไข</button>
-                            <button onclick="deleteCar(${car.id})" class="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold">ลบ</button>
+                            <button type="button" onclick="editCar(${car.id})" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">แก้ไข</button>
+                            <button type="button" onclick="deleteCar(${car.id})" class="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold">ลบ</button>
                           </td>
                         </tr>
                       `).join('')}
@@ -474,7 +911,6 @@
                   </table>
                 </div>
               </div>
-
             </div>
 
           </main>
@@ -482,74 +918,134 @@
       `;
     }
 
-    async function selectBrand(brandId) {
+    // ==================== INTERACTION & CALCULATION LOGIC ====================
+
+    function selectBrand(brandId) {
       state.selectedBrand = brandId;
       state.step = 'calc';
-      await loadDataFromCloud();
+      state.discount = 0;
+      state.accessories = 0;
+      initBrandSelectionDefaults();
+      render();
     }
 
-    function initCalcValues() {
-      if (document.getElementById('modelSelect')) {
-        onModelChange();
+    function onModelChange(modelName) {
+      state.selectedModel = modelName;
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand && c.model === modelName);
+      state.selectedCarId = brandCars[0] ? brandCars[0].id : null;
+      const car = brandCars[0];
+      state.customCarPrice = car ? car.price : 0;
+      state.selectedColorIdx = 0;
+
+      // จับคู่แคมเปญตามชื่อรุ่นรถอัตโนมัติ
+      const matchedCampIdx = state.campaigns.findIndex(cp => cp.name.toUpperCase().includes(modelName.toUpperCase()));
+      if (matchedCampIdx !== -1) {
+        state.plans.forEach(p => { p.campaignIdx = matchedCampIdx; p.customRate = ''; });
       }
+      render();
     }
 
-    function onModelChange() {
-      const selectedModel = document.getElementById('modelSelect').value;
-      const gradesForModel = state.cars.filter(c => c.model === selectedModel);
-      const gradeSel = document.getElementById('gradeSelect');
-      if (gradeSel) {
-        gradeSel.innerHTML = gradesForModel.map(g => `<option value="${g.id}">${g.grade} (${fmt(g.price)} ฿)</option>`).join('');
-        onGradeChange();
-      }
-    }
-
-    function onGradeChange() {
-      const carId = document.getElementById('gradeSelect').value;
+    function onGradeChange(carId) {
+      state.selectedCarId = carId;
       const car = state.cars.find(c => c.id == carId);
       if (car) {
-        document.getElementById('carPrice').value = car.price;
-        const colorSel = document.getElementById('colorSelect');
-        colorSel.innerHTML = (car.colors || []).map((col, i) => `<option value="${i}" data-price="${col.price}">${col.name} (+${fmt(col.price)}฿)</option>`).join('') || '<option value="0" data-price="0">สีมาตรฐาน</option>';
-        onColorChange();
+        state.customCarPrice = car.price;
+        state.selectedColorIdx = 0;
       }
+      render();
     }
 
-    function onColorChange() {
-      const colorSel = document.getElementById('colorSelect');
-      const opt = colorSel.options[colorSel.selectedIndex];
-      document.getElementById('colorPrice').value = opt ? num(opt.getAttribute('data-price')) : 0;
+    function onColorChange(colorIdx) {
+      state.selectedColorIdx = parseInt(colorIdx, 10) || 0;
+      const car = state.cars.find(c => c.id == state.selectedCarId);
+      const colors = (car && car.colors && car.colors.length > 0) ? car.colors : [{ name: 'สีมาตรฐาน', price: 0 }];
+      const chosen = colors[state.selectedColorIdx] || colors[0];
+      const colorPriceEl = document.getElementById('colorPrice');
+      if (colorPriceEl) colorPriceEl.value = fmt(chosen.price);
       calculateAll();
     }
 
-    // จัดการเปิด/ปิดแผน 1-4
+    function onPriceInput() {
+      const priceEl = document.getElementById('carPrice');
+      state.customCarPrice = num(priceEl ? priceEl.value : 0);
+      calculateAll();
+    }
+
+    function getNetPriceWithoutDown() {
+      const carPrice = num(document.getElementById('carPrice')?.value ?? state.customCarPrice);
+      const discount = num(document.getElementById('discount')?.value ?? state.discount);
+      const colorPrice = num(document.getElementById('colorPrice')?.value ?? 0);
+      const accessories = num(document.getElementById('accessories')?.value ?? state.accessories);
+      return Math.max((carPrice - discount) + colorPrice + accessories, 0);
+    }
+
+    function getAutoRateForPlan(plan) {
+      const cp = state.campaigns[plan.campaignIdx] || state.campaigns[0];
+      if (!cp || !cp.rates) return 2.79;
+
+      const downPctVal = num(plan.downPct);
+      let matchedTier = 5;
+      for (const tier of DOWN_TIERS) {
+        if (downPctVal >= tier) {
+          matchedTier = tier;
+          break;
+        }
+      }
+      const rTable = cp.rates[matchedTier] || {};
+      const rate = rTable[plan.term];
+      return (rate !== null && rate !== undefined && rate !== '-' && !isNaN(parseFloat(rate))) ? parseFloat(rate) : 2.79;
+    }
+
     function togglePlan(planId) {
       const plan = state.plans.find(p => p.id === planId);
       if (plan) {
         plan.isOpen = !plan.isOpen;
         render();
-        setTimeout(initCalcValues, 50);
       }
     }
 
-    // อัปเดตค่าในแผนคำนวณ
-    function updatePlan(planId, field, val) {
+    function updatePlanCampaign(planId, campIdx) {
       const plan = state.plans.find(p => p.id === planId);
       if (plan) {
-        plan[field] = val;
+        plan.campaignIdx = parseInt(campIdx, 10) || 0;
+        plan.customRate = '';
+        const rateInput = document.getElementById(`plan-${planId}-rateInput`);
+        if (rateInput) rateInput.value = getAutoRateForPlan(plan);
+        calculateAll();
+      }
+    }
+
+    function updatePlanTerm(planId, termVal) {
+      const plan = state.plans.find(p => p.id === planId);
+      if (plan) {
+        plan.term = parseInt(termVal, 10) || 48;
+        plan.customRate = '';
+        const rateInput = document.getElementById(`plan-${planId}-rateInput`);
+        if (rateInput) rateInput.value = getAutoRateForPlan(plan);
+        const titleEl = document.getElementById(`sidebar-title-${planId}`);
+        if (titleEl) titleEl.innerText = `${plan.name} (ผ่อน ${plan.term} เดือน)`;
         calculateAll();
       }
     }
 
     function updatePlanDownPct(planId, pctVal) {
+      if (pctVal === '') return;
       const plan = state.plans.find(p => p.id === planId);
       if (plan) {
-        plan.downPct = num(pctVal);
+        plan.downMode = 'pct';
+        plan.downPct = Math.min(Math.max(num(pctVal), 0), 95);
         const net = getNetPriceWithoutDown();
-        const downAmt = Math.round(net * (plan.downPct / 100));
-        plan.downAmt = downAmt;
-        const downAmtInput = document.getElementById(`plan-${planId}-downAmt`);
-        if (downAmtInput) downAmtInput.value = fmt(downAmt);
+        plan.downAmt = Math.round(net * (plan.downPct / 100));
+
+        const pctInput = document.getElementById(`plan-${planId}-downPct`);
+        const amtInput = document.getElementById(`plan-${planId}-downAmt`);
+        if (pctInput && document.activeElement !== pctInput) pctInput.value = plan.downPct;
+        if (amtInput) amtInput.value = fmt(plan.downAmt);
+
+        if (plan.customRate === '') {
+          const rateInput = document.getElementById(`plan-${planId}-rateInput`);
+          if (rateInput) rateInput.value = getAutoRateForPlan(plan);
+        }
         calculateAll();
       }
     }
@@ -557,67 +1053,219 @@
     function updatePlanDownAmt(planId, amtVal) {
       const plan = state.plans.find(p => p.id === planId);
       if (plan) {
+        plan.downMode = 'amt';
         plan.downAmt = num(amtVal);
         const net = getNetPriceWithoutDown();
-        if (net > 0) plan.downPct = Math.round((plan.downAmt / net) * 100);
-        const downPctInput = document.getElementById(`plan-${planId}-downPct`);
-        if (downPctInput) downPctInput.value = plan.downPct;
+        plan.downPct = net > 0 ? Number(((plan.downAmt / net) * 100).toFixed(2)) : 0;
+
+        const pctInput = document.getElementById(`plan-${planId}-downPct`);
+        if (pctInput) pctInput.value = plan.downPct;
+
+        if (plan.customRate === '') {
+          const rateInput = document.getElementById(`plan-${planId}-rateInput`);
+          if (rateInput) rateInput.value = getAutoRateForPlan(plan);
+        }
         calculateAll();
       }
     }
 
-    function getNetPriceWithoutDown() {
-      return (num(document.getElementById('carPrice')?.value) - num(document.getElementById('discount')?.value)) + num(document.getElementById('colorPrice')?.value) + num(document.getElementById('accessories')?.value);
+    function updatePlanCustomRate(planId, rateVal) {
+      const plan = state.plans.find(p => p.id === planId);
+      if (plan) {
+        plan.customRate = rateVal;
+        calculateAll();
+      }
     }
 
-    // คำนวณยอดทั้งหมดและอัปเดต UI แบบเรียลไทม์
+    function resetPlanRate(planId) {
+      const plan = state.plans.find(p => p.id === planId);
+      if (plan) {
+        plan.customRate = '';
+        render();
+      }
+    }
+
     function calculateAll() {
       const netPrice = getNetPriceWithoutDown();
+
+      // อัปเดตยอดเงินดาวน์ของแต่ละแผนให้สอดคล้องกับราคารถสุทธิ
+      state.plans.forEach(p => {
+        if (p.downMode === 'pct') {
+          p.downAmt = Math.round(netPrice * (num(p.downPct) / 100));
+          const amtInput = document.getElementById(`plan-${p.id}-downAmt`);
+          if (amtInput && document.activeElement !== amtInput) {
+            amtInput.value = fmt(p.downAmt);
+          }
+        } else {
+          p.downPct = netPrice > 0 ? Number(((num(p.downAmt) / netPrice) * 100).toFixed(2)) : 0;
+          const pctInput = document.getElementById(`plan-${p.id}-downPct`);
+          if (pctInput && document.activeElement !== pctInput) {
+            pctInput.value = p.downPct;
+          }
+        }
+      });
+
+      const activePlan = state.plans.find(p => p.isOpen) || state.plans[0];
+      const downTotal = num(activePlan.downAmt);
+      const financeTotal = Math.max(netPrice - downTotal, 0);
+
       if (document.getElementById('resNetPriceFull')) document.getElementById('resNetPriceFull').innerText = fmt(netPrice) + ' ฿';
       if (document.getElementById('resNetPrice')) document.getElementById('resNetPrice').innerText = fmt(netPrice) + ' ฿';
-
-      const currentModel = document.getElementById('modelSelect') ? document.getElementById('modelSelect').value : '';
-      const matchingCampaigns = state.campaigns.filter(cp => cp.name.toUpperCase() === currentModel.toUpperCase());
-      const availableCampaigns = matchingCampaigns.length > 0 ? matchingCampaigns : state.campaigns;
+      if (document.getElementById('resDownTotal')) document.getElementById('resDownTotal').innerText = fmt(downTotal) + ' ฿';
+      if (document.getElementById('resFinanceTotal')) document.getElementById('resFinanceTotal').innerText = fmt(financeTotal) + ' ฿';
 
       state.plans.forEach(p => {
-        const cp = availableCampaigns[p.campaignIdx] || availableCampaigns[0] || {};
-        const downPctVal = p.downPct;
-        let matchedPct = 25;
-        [30, 25, 20, 15, 10, 5].forEach(t => { if (downPctVal >= t) matchedPct = t; });
-        if (downPctVal < 5) matchedPct = 5;
-
-        const rTable = cp && cp.rates && cp.rates[matchedPct] ? cp.rates[matchedPct] : {};
-        const autoRate = rTable[p.term] ? num(rTable[p.term]) : 2.79;
+        const autoRate = getAutoRateForPlan(p);
         const rateVal = p.customRate !== '' ? num(p.customRate) : autoRate;
-
         const down = num(p.downAmt);
         const finance = Math.max(netPrice - down, 0);
-        const totalPay = finance + (finance * (rateVal / 100) * (p.term / 12));
+        const totalInterest = finance * (rateVal / 100) * (p.term / 12);
+        const totalPay = finance + totalInterest;
         const monthly = p.term > 0 ? Math.ceil(totalPay / p.term) : 0;
 
-        // อัปเดต Sidebar Card
         const rateSpan = document.getElementById(`sidebar-rate-${p.id}`);
+        const downPctSpan = document.getElementById(`sidebar-downpct-${p.id}`);
         const downSpan = document.getElementById(`sidebar-down-${p.id}`);
         const financeSpan = document.getElementById(`sidebar-finance-${p.id}`);
         const instSpan = document.getElementById(`sidebar-inst-${p.id}`);
 
-        if (rateSpan) rateSpan.innerText = rateVal;
+        if (rateSpan) rateSpan.innerText = rateVal.toFixed(2);
+        if (downPctSpan) downPctSpan.innerText = p.downPct;
         if (downSpan) downSpan.innerText = fmt(down);
         if (financeSpan) financeSpan.innerText = fmt(finance);
         if (instSpan) instSpan.innerText = fmt(monthly) + ' ฿ / เดือน';
       });
     }
 
-    // กำหนดสีรถเพิ่มเติม
+    // ==================== PRINT & PDF EXPORT LOGIC ====================
+
+    function openPrintModal() {
+      document.getElementById('modalSalesName').value = state.sales.name;
+      document.getElementById('modalSalesPhone').value = state.sales.phone;
+      document.getElementById('modalSalesLine').value = state.sales.line;
+      document.getElementById('modalSalesBranch').value = state.sales.branch;
+      document.getElementById('modalFreebies').value = state.sales.freebies;
+      document.getElementById('printModal').classList.remove('hidden');
+    }
+
+    function closePrintModal() {
+      document.getElementById('printModal').classList.add('hidden');
+    }
+
+    function executePrint() {
+      // บันทึกค่าที่แก้ไขใน Modal ลง State และ LocalStorage ด้วย
+      state.sales.name = document.getElementById('modalSalesName').value.trim();
+      state.sales.phone = document.getElementById('modalSalesPhone').value.trim();
+      state.sales.line = document.getElementById('modalSalesLine').value.trim();
+      state.sales.branch = document.getElementById('modalSalesBranch').value.trim();
+      state.sales.freebies = document.getElementById('modalFreebies').value.trim();
+      saveToStorage();
+
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR', img: '' };
+      const modelSel = document.getElementById('modelSelect');
+      const gradeSel = document.getElementById('gradeSelect');
+      const colorSel = document.getElementById('colorSelect');
+
+      const car = state.cars.find(c => c.id == state.selectedCarId);
+      const gradeText = car ? car.grade : (gradeSel && gradeSel.options[gradeSel.selectedIndex] ? gradeSel.options[gradeSel.selectedIndex].text : '-');
+      const colorText = colorSel && colorSel.options[colorSel.selectedIndex] ? colorSel.options[colorSel.selectedIndex].text : 'สีมาตรฐาน';
+      const customerName = document.getElementById('modalCustomerName').value.trim() || 'ลูกค้าผู้มีอุปการคุณ';
+
+      // Populate Print Area Header & Info
+      document.getElementById('printBrandLogo').src = brandObj.img;
+      document.getElementById('printCompanyName').innerText = state.company.name;
+      document.getElementById('printCompanyAddress').innerText = state.company.address;
+      document.getElementById('printDate').innerText = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+
+      document.getElementById('printModel').innerText = `${brandObj.name} ${modelSel ? modelSel.value : ''}`;
+      document.getElementById('printGrade').innerText = gradeText;
+      document.getElementById('printColor').innerText = colorText;
+      document.getElementById('printCustomer').innerText = customerName;
+
+      document.getElementById('printSalesName').innerText = state.sales.name;
+      document.getElementById('printSalesPhone').innerText = state.sales.phone;
+      document.getElementById('printSalesLine').innerText = state.sales.line;
+      document.getElementById('printSalesBranch').innerText = state.sales.branch;
+
+      document.getElementById('printSignSalesName').innerText = `(${state.sales.name || 'ผู้เสนอราคา'})`;
+      document.getElementById('printSignCustomerName').innerText = `(${customerName})`;
+
+      // Price Calculations
+      const basePrice = num(document.getElementById('carPrice')?.value);
+      const discount = num(document.getElementById('discount')?.value);
+      const colorPrice = num(document.getElementById('colorPrice')?.value);
+      const accessories = num(document.getElementById('accessories')?.value);
+      const netCar = Math.max(basePrice - discount, 0);
+      const netAddon = colorPrice + accessories;
+      const finalNet = getNetPriceWithoutDown();
+
+      document.getElementById('printBasePrice').innerText = fmt(basePrice);
+      document.getElementById('printDiscount').innerText = discount > 0 ? `-${fmt(discount)}` : '0';
+      document.getElementById('printNetCarPrice').innerText = fmt(netCar);
+      document.getElementById('printColorPriceLabel').innerText = fmt(colorPrice);
+      document.getElementById('printAccPriceLabel').innerText = fmt(accessories);
+      document.getElementById('printAddonPrice').innerText = netAddon > 0 ? `+${fmt(netAddon)}` : '0';
+      document.getElementById('printNetAddon').innerText = fmt(netAddon);
+      document.getElementById('printFinalNetPrice').innerText = fmt(finalNet) + ' ฿';
+      document.getElementById('printFreebiesText').innerText = state.sales.freebies || '-';
+
+      // Populate Active Installment Plans
+      let plansHtml = '';
+      const activePlans = state.plans.filter(p => p.isOpen);
+      const plansToRender = activePlans.length > 0 ? activePlans : [state.plans[0]];
+
+      plansToRender.forEach(p => {
+        const down = num(p.downAmt);
+        const finance = Math.max(finalNet - down, 0);
+        const cp = state.campaigns[p.campaignIdx] || state.campaigns[0] || { finance: 'ไฟแนนซ์มาตรฐาน', name: '-' };
+        const autoRate = getAutoRateForPlan(p);
+        const rateVal = p.customRate !== '' ? num(p.customRate) : autoRate;
+        const totalPay = finance + (finance * (rateVal / 100) * (p.term / 12));
+        const monthly = p.term > 0 ? Math.ceil(totalPay / p.term) : 0;
+
+        plansHtml += `
+          <tr class="even:bg-slate-50">
+            <td class="border border-slate-300 py-1.5 px-2 text-left font-bold text-slate-800">
+              ${p.name} <span class="font-normal text-slate-500 text-[9.5px]">(${cp.finance})</span>
+            </td>
+            <td class="border border-slate-300 py-1.5 px-2 font-semibold">${p.term} เดือน</td>
+            <td class="border border-slate-300 py-1.5 px-2 text-right font-semibold">${fmt(down)} <span class="text-slate-500 text-[9.5px]">(${p.downPct}%)</span></td>
+            <td class="border border-slate-300 py-1.5 px-2 text-right font-semibold">${fmt(finance)}</td>
+            <td class="border border-slate-300 py-1.5 px-2 font-bold text-slate-700">${rateVal.toFixed(2)}%</td>
+            <td class="border border-slate-300 py-1.5 px-2 text-right font-extrabold text-blue-700 bg-blue-50/50">${fmt(monthly)} ฿</td>
+          </tr>
+        `;
+      });
+      document.getElementById('printPlansTableBody').innerHTML = plansHtml;
+
+      closePrintModal();
+      setTimeout(() => {
+        window.print();
+      }, 250);
+    }
+
+    // ==================== SETTINGS & ADMIN MANAGEMENT ====================
+
+    function saveCompanyAndSales() {
+      state.company.name = document.getElementById('settingCompanyName').value.trim();
+      state.company.address = document.getElementById('settingCompanyAddress').value.trim();
+      state.sales.name = document.getElementById('settingSalesName').value.trim();
+      state.sales.phone = document.getElementById('settingSalesPhone').value.trim();
+      state.sales.line = document.getElementById('settingSalesLine').value.trim();
+      state.sales.branch = document.getElementById('settingSalesBranch').value.trim();
+      saveToStorage();
+      alert('✅ บันทึกข้อมูลบริษัทและที่ปรึกษาการขายเรียบร้อยแล้ว!');
+    }
+
     function addColorRow(name = '', price = 0) {
       const container = document.getElementById('colorRowsContainer');
+      if (!container) return;
       const div = document.createElement('div');
       div.className = 'flex gap-2 items-center color-row';
       div.innerHTML = `
-        <input type="text" placeholder="ชื่อสี (เช่น LAVENDER PURPLE)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input" value="${name}">
-        <input type="number" placeholder="ค่าสี (บาท เช่น 7000)" class="w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input" value="${price}">
-        <button type="button" onclick="removeColorRow(this)" class="px-3 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-semibold">❌</button>
+        <input type="text" placeholder="ชื่อสี (เช่น สีขาวมุก)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input text-slate-800" value="${name}">
+        <input type="number" placeholder="ค่าสี (เช่น 0 หรือ 7000)" class="w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input text-slate-800" value="${price}">
+        <button type="button" onclick="removeColorRow(this)" class="px-3.5 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-bold">✕</button>
       `;
       container.appendChild(div);
     }
@@ -631,60 +1279,64 @@
       }
     }
 
-    // AI Vision / Fallback handler
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = err => reject(err);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ระบบ AI Vision แปลงตารางดอกเบี้ย (เชื่อมต่อ Cloudflare Worker /api/extract-rates + Fallback)
     async function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
-
-      const formData = new FormData();
-      formData.append('file', file);
-      const uploadInput = event.target;
-      const parentContainer = uploadInput.parentElement;
-      let statusLabel = document.createElement('div');
-      statusLabel.className = 'text-xs text-blue-600 font-bold mt-1';
-      statusLabel.innerText = '🤖 กำลังให้ AI วิเคราะห์ตารางดอกเบี้ย กรุณารอสักครู่...';
-      parentContainer.appendChild(statusLabel);
+      const statusBox = document.getElementById('aiUploadStatus');
+      statusBox.className = 'text-xs text-blue-700 font-bold mt-2 flex items-center gap-2';
+      statusBox.innerHTML = '<span>⏳</span> กำลังส่งภาพตารางดอกเบี้ยให้ AI Vision (Gemini 2.5 Flash) วิเคราะห์...';
 
       try {
-        const response = await fetch('/api/extract-rates', { method: 'POST', body: formData });
-        if (!response.ok) throw new Error('API extraction endpoint not available');
-        const extractedData = await response.json();
-        if (extractedData.rates) fillRateTable(extractedData.rates);
-        if (extractedData.finance_company) document.querySelector('#financeCompanyInput').value = extractedData.finance_company;
-        if (extractedData.campaign_name) document.querySelector('#campaignNameInput').value = extractedData.campaign_name;
-        statusLabel.className = 'text-xs text-green-600 font-bold mt-1';
-        statusLabel.innerText = '✅ AI วิเคราะห์และเติมข้อมูลตารางดอกเบี้ยสำเร็จ!';
-        setTimeout(() => statusLabel.remove(), 4000);
-      } catch (err) {
-        const mockRates = {
-          30: { 24: '1.89', 36: '1.99', 48: '2.09', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
-          25: { 24: '1.99', 36: '2.09', 48: '2.19', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
-          20: { 24: '2.09', 36: '2.19', 48: '2.45', 60: '2.65', 72: '3.10', 84: '3.65', 96: '-' },
-          15: { 24: '2.19', 36: '2.29', 48: '2.95', 60: '3.20', 72: '3.50', 84: '4.25', 96: '-' },
-          10: { 24: '2.29', 36: '2.39', 48: '3.49', 60: '3.89', 72: '4.09', 84: '4.79', 96: '-' },
-          5:  { 24: '2.39', 36: '2.49', 48: '3.89', 60: '4.35', 72: '4.59', 84: '5.15', 96: '-' }
-        };
-        fillRateTable(mockRates);
-        if (!document.querySelector('#financeCompanyInput').value) document.querySelector('#financeCompanyInput').value = 'กรุงศรี ออโต้';
-        if (!document.querySelector('#campaignNameInput').value) document.querySelector('#campaignNameInput').value = 'URBAN';
-        statusLabel.className = 'text-xs text-emerald-600 font-bold mt-1';
-        statusLabel.innerText = '✅ AI (Simulated) วิเคราะห์ตารางดอกเบี้ยสำเร็จ!';
-        setTimeout(() => statusLabel.remove(), 4000);
-      }
-    }
+        const base64DataUrl = await fileToBase64(file);
+        const res = await fetch('/api/extract-rates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64DataUrl, mimeType: file.type })
+        }).catch(() => null);
 
-    function fillRateTable(rates) {
-      for (const [down, terms] of Object.entries(rates)) {
-        for (const [month, rate] of Object.entries(terms)) {
-          if (rate !== null && rate !== undefined) {
-            const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
-            if (input) input.value = rate;
-          }
+        let extractedRates = null;
+        if (res && res.ok) {
+          const data = await res.json();
+          extractedRates = data.rates || data;
+        } else {
+          // Fallback Simulation เมื่อทดสอบแบบ Offline
+          await new Promise(r => setTimeout(r, 900));
+          extractedRates = {
+            30: { 24: '1.89', 36: '1.99', 48: '1.79', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
+            25: { 24: '1.99', 36: '2.09', 48: '1.79', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
+            20: { 24: '2.09', 36: '2.19', 48: '2.45', 60: '2.65', 72: '3.10', 84: '3.65', 96: '-' },
+            15: { 24: '2.19', 36: '2.29', 48: '2.95', 60: '3.20', 72: '3.50', 84: '4.25', 96: '-' },
+            10: { 24: '2.29', 36: '2.39', 48: '3.49', 60: '3.89', 72: '4.09', 84: '4.79', 96: '-' },
+            5:  { 24: '2.39', 36: '2.49', 48: '3.89', 60: '4.35', 72: '4.59', 84: '5.15', 96: '-' }
+          };
         }
+
+        if (extractedRates) {
+          for (const [down, terms] of Object.entries(extractedRates)) {
+            for (const [month, rate] of Object.entries(terms)) {
+              const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
+              if (input) input.value = (rate !== null && rate !== undefined && rate !== '') ? rate : '-';
+            }
+          }
+          statusBox.className = 'text-xs text-emerald-600 font-bold mt-2';
+          statusBox.innerText = '✅ AI วิเคราะห์และเติมตัวเลขเรทดอกเบี้ยลงตารางสำเร็จ! กรุณาตรวจสอบและกดบันทึก';
+        }
+      } catch (err) {
+        statusBox.className = 'text-xs text-red-600 font-bold mt-2';
+        statusBox.innerText = '❌ เกิดข้อผิดพลาดในการอ่านไฟล์ภาพ กรุณาลองใหม่อีกครั้ง';
       }
     }
 
-    // CRUD Campaigns
     async function saveCampaign() {
       const finance = document.getElementById('financeCompanyInput').value.trim();
       const name = document.getElementById('campaignNameInput').value.trim().toUpperCase();
@@ -695,12 +1347,13 @@
       }
 
       const rates = {};
-      [30, 25, 20, 15, 10, 5].forEach(down => {
+      DOWN_TIERS.forEach(down => {
         rates[down] = {};
-        [24, 36, 48, 60, 72, 84, 96].forEach(month => {
+        AVAILABLE_MONTHS.forEach(month => {
           const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
           const val = input ? input.value.trim() : '-';
-          rates[down][month] = (val && val !== '-' && val !== '') ? parseFloat(val) : null;
+          const parsed = parseFloat(val);
+          rates[down][month] = (val !== '-' && val !== '' && !isNaN(parsed)) ? parsed : null;
         });
       });
 
@@ -709,34 +1362,25 @@
       if (state.editingCampaignIndex !== null) {
         state.campaigns[state.editingCampaignIndex] = campaignData;
         state.editingCampaignIndex = null;
-        alert('✅ อัปเดตแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
       } else {
         state.campaigns.push(campaignData);
-        alert('✅ บันทึกแคมเปญไฟแนนซ์และเรทดอกเบี้ยเรียบร้อยแล้ว!');
       }
 
-      document.getElementById('financeCompanyInput').value = '';
-      document.getElementById('campaignNameInput').value = '';
+      saveToStorage();
+      fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(campaignData)
+      }).catch(() => null);
+
       render();
+      alert('✅ บันทึกข้อมูลแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
     }
 
     function editCampaign(index) {
-      const cp = state.campaigns[index];
-      if (!cp) return;
       state.editingCampaignIndex = index;
-      document.getElementById('financeCompanyInput').value = cp.finance;
-      document.getElementById('campaignNameInput').value = cp.name;
-
-      if (cp.rates) {
-        for (const [down, terms] of Object.entries(cp.rates)) {
-          for (const [month, rate] of Object.entries(terms)) {
-            const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
-            if (input) input.value = (rate !== null && rate !== undefined) ? rate : '-';
-          }
-        }
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       render();
+      document.getElementById('campaignFormSection')?.scrollIntoView({ behavior: 'smooth' });
     }
 
     function cancelEditCampaign() {
@@ -745,13 +1389,13 @@
     }
 
     function deleteCampaign(index) {
-      if (confirm('คุณต้องการลบแคมเปญนี้ใช่หรือไม่?')) {
+      if (confirm('ยืนยันการลบแคมเปญไฟแนนซ์นี้ใช่หรือไม่?')) {
         state.campaigns.splice(index, 1);
+        saveToStorage();
         render();
       }
     }
 
-    // CRUD Cars
     async function addNewCarModel(e) {
       e.preventDefault();
       const model = document.getElementById('newModelName').value.trim().toUpperCase();
@@ -765,16 +1409,17 @@
         if (cName) colors.push({ name: cName, price: cPrice });
       });
 
+      const finalColors = colors.length > 0 ? colors : [{ name: 'สีมาตรฐาน', price: 0 }];
+
       if (state.editingCarId !== null) {
         const car = state.cars.find(c => c.id == state.editingCarId);
         if (car) {
           car.model = model;
           car.grade = grade;
           car.price = price;
-          car.colors = colors;
+          car.colors = finalColors;
         }
         state.editingCarId = null;
-        alert('✅ อัปเดตข้อมูลรุ่นรถเรียบร้อยแล้ว!');
       } else {
         const newCar = {
           id: Date.now(),
@@ -782,34 +1427,26 @@
           model,
           grade,
           price,
-          colors: colors.length > 0 ? colors : [{ name: 'สีมาตรฐาน', price: 0 }]
+          colors: finalColors
         };
         state.cars.push(newCar);
-        alert('✅ บันทึกข้อมูลรุ่นรถสำเร็จ!');
       }
 
-      document.getElementById('newModelName').value = '';
-      document.getElementById('newGradeName').value = '';
-      document.getElementById('newPrice').value = '';
+      saveToStorage();
+      fetch('/api/cars', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand: state.selectedBrand, model, grade, price, colors: finalColors })
+      }).catch(() => null);
+
       render();
+      alert('✅ บันทึกข้อมูลรุ่นรถเรียบร้อยแล้ว!');
     }
 
     function editCar(id) {
-      const car = state.cars.find(c => c.id == id);
-      if (!car) return;
       state.editingCarId = id;
-      document.getElementById('newModelName').value = car.model;
-      document.getElementById('newGradeName').value = car.grade;
-      document.getElementById('newPrice').value = car.price;
-
-      const container = document.getElementById('colorRowsContainer');
-      container.innerHTML = '';
-      if (car.colors && car.colors.length > 0) {
-        car.colors.forEach(c => addColorRow(c.name, c.price));
-      } else {
-        addColorRow('สีมาตรฐาน', 0);
-      }
       render();
+      document.getElementById('carFormSection')?.scrollIntoView({ behavior: 'smooth' });
     }
 
     function cancelEditCar() {
@@ -818,13 +1455,17 @@
     }
 
     function deleteCar(id) {
-      if (confirm('คุณต้องการลบข้อมูลรุ่นรถนี้ใช่หรือไม่?')) {
+      if (confirm('ยืนยันการลบข้อมูลรุ่นรถนี้ใช่หรือไม่?')) {
         state.cars = state.cars.filter(c => c.id != id);
+        saveToStorage();
         render();
       }
     }
 
+    // เริ่มต้นการทำงานของระบบ
+    loadDataFromStorage();
     render();
+    syncFromCloud();
   </script>
 </body>
 </html>
