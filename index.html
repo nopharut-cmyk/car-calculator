@@ -71,11 +71,36 @@
           fetch(`/api/cars?brand=${state.selectedBrand}`),
           fetch('/api/campaigns')
         ]);
+        
+        if (!carsRes.ok || !campRes.ok) throw new Error('API response failed');
+        
         state.cars = await carsRes.json();
         state.campaigns = await campRes.json();
-        render();
       } catch (err) {
-        console.error("Error loading data from D1:", err);
+        console.warn("⚠️ ไม่สามารถเชื่อมต่อ Cloud D1 ได้ (กำลังใช้ Mock Data สำรอง):", err);
+        
+        // Mock Data สำรองเพื่อให้หน้าจอทำงานต่อได้ทันทีโดยไม่ติดขัด
+        state.cars = [
+          { id: 101, model: 'DEMO MODEL (ตัวอย่าง)', grade: 'STANDARD', price: 799000, colors: [{ name: 'สีขาวมุก', price: 7000 }, { name: 'สีดำ', price: 0 }] },
+          { id: 102, model: 'DEMO MODEL (ตัวอย่าง)', grade: 'PREMIUM', price: 899000, colors: [{ name: 'สีขาวมุก', price: 7000 }, { name: 'สีดำ', price: 0 }] }
+        ];
+        state.campaigns = [
+          {
+            finance: 'ไฟแนนซ์มาตรฐาน',
+            name: 'แคมเปญดอกเบี้ยพิเศษ',
+            rates: {
+              30: { 24: 1.89, 36: 1.99, 48: 2.09, 60: 2.19, 72: 2.49, 84: 2.89, 96: 3.39 },
+              25: { 24: 1.99, 36: 2.09, 48: 2.19, 60: 2.29, 72: 2.59, 84: 2.99, 96: 3.49 },
+              20: { 24: 2.09, 36: 2.19, 48: 2.29, 60: 2.39, 72: 2.69, 84: 3.09, 96: 3.59 },
+              15: { 24: 2.19, 36: 2.29, 48: 2.39, 60: 2.49, 72: 2.79, 84: 3.19, 96: 3.69 },
+              10: { 24: 2.29, 36: 2.39, 48: 2.49, 60: 2.59, 72: 2.89, 84: 3.29, 96: 3.79 },
+              5:  { 24: 2.39, 36: 2.49, 48: 2.59, 60: 2.69, 72: 2.99, 84: 3.39, 96: 3.89 }
+            }
+          }
+        ];
+      } finally {
+        // บังคับให้เรนเดอร์หน้าจอเสมอ ไม่ว่าจะดึงข้อมูลจาก Cloud สำเร็จหรือไม่ก็ตาม
+        render();
       }
     }
 
@@ -253,7 +278,6 @@
             <button onclick="state.step='calc';render();setTimeout(initCalcValues, 50);" class="px-4 py-2 bg-slate-800 rounded-xl text-xs">กลับหน้าคำนวณ</button>
           </header>
           <main class="max-w-4xl w-full mx-auto p-6 space-y-6">
-            <!-- ส่วนเพิ่มแคมเปญใหม่พร้อมระบบ AI วิเคราะห์ตารางดอกเบี้ยอัตโนมัติ -->
             <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
               <h3 class="font-bold text-slate-800 mb-2">➕ เพิ่มแคมเปญไฟแนนซ์ใหม่ (ด้วย AI วิเคราะห์ตารางอัตโนมัติ)</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -271,7 +295,6 @@
                 <input type="file" id="rateImageFile" accept="image/*,application/pdf" onchange="handleImageUpload(event)" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
               </div>
 
-              <!-- ตารางกรอกดอกเบี้ยอัตโนมัติรองรับ AI -->
               <div class="overflow-x-auto pt-2">
                 <table class="w-full text-center border-collapse">
                   <thead>
@@ -355,7 +378,6 @@
       calculate();
     }
 
-    // ฟังก์ชันจัดการอัปโหลดภาพและรับค่าจาก AI มาเติมฟอร์ม[cite: 3]
     async function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -379,7 +401,6 @@
         if (!response.ok) throw new Error('Network response was not ok');
         const extractedData = await response.json();
 
-        // เติมข้อมูลดอกเบี้ยลงตาราง[cite: 3]
         if (extractedData.rates) {
           for (const [down, terms] of Object.entries(extractedData.rates)) {
             for (const [month, rate] of Object.entries(terms)) {
@@ -460,7 +481,6 @@
       let matchedPct = 25;
       [30, 25, 20, 15, 10, 5].forEach(t => { if (downPct >= t) matchedPct = t; });
 
-      // ใช้ค่าจาก input ในตารางที่ AI เติมหรือผู้ใช้กรอก
       AVAILABLE_MONTHS.forEach(m => {
         const card = document.getElementById(`card-inst-${m}`);
         const span = document.getElementById(`inst${m}`);
