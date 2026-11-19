@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (xlsx) สำหรับส่งออกและนำเข้าไฟล์ Excel (.xlsx 3 Sheets) และ CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -70,6 +72,9 @@
   
   <!-- Main Application Container -->
   <div id="app" class="flex-1 flex flex-col no-print"></div>
+
+  <!-- Hidden File Input สำหรับนำเข้าไฟล์ Excel / CSV -->
+  <input type="file" id="globalExcelImportInput" accept=".xlsx,.xls,.csv" class="hidden no-print" onchange="handleExcelImportFile(event)">
 
   <!-- Modal คำนวณรายรับ / รายจ่าย / กำไร (Margin & Commission) ฝั่งเซลล์ -->
   <div id="marginModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2.5 sm:p-4 no-print transition-opacity">
@@ -330,7 +335,7 @@
     </div>
   </div>
 
-  <!-- Modal ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึก PDF (เพิ่มปุ่มเลือกรูปแบบที่ 1 และ รูปแบบที่ 2 ด้านล่างซ้ายตามภาพที่ 5) -->
+  <!-- Modal ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึก PDF -->
   <div id="printModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2.5 sm:p-4 no-print transition-opacity">
     <div class="bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-7 shadow-2xl border border-slate-100 space-y-4 max-h-[94vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-3 border-b border-slate-100">
@@ -457,7 +462,7 @@
         </div>
       </div>
 
-      <!-- Footer: ปุ่มเลือกรูปแบบที่ 1 / รูปแบบที่ 2 (ซ้าย) + ปุ่มยกเลิก / พิมพ์ (ขวา) ตามภาพที่ 5 -->
+      <!-- Footer: ปุ่มเลือกรูปแบบที่ 1 / รูปแบบที่ 2 (ซ้าย) + ปุ่มยกเลิก / พิมพ์ (ขวา) -->
       <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pt-3 border-t border-slate-100">
         <!-- ปุ่มเลือกรูปแบบใบเสนอราคา 2 แบบ -->
         <div class="flex items-center gap-2">
@@ -543,6 +548,7 @@
       accessories: 0,
       driveOffInputText: '',
       printTemplate: 1, // 1 = รูปแบบที่ 1 (มาตรฐาน), 2 = รูปแบบที่ 2 (Executive Luxury A4)
+      pendingImportMode: 'all', // 'all' | 'cars' | 'accessories' | 'campaigns'
       expandedCarFolders: {}, // { [modelName]: true/false }
       expandedAccFolders: {}, // { [modelName]: true/false }
       brandProfiles: {},
@@ -623,7 +629,7 @@
       return isNaN(p) ? 0 : p;
     };
 
-    // ปรับรูปแบบคำว่า E-POWER ให้ตัว e เป็นตัวเล็ก (e-POWER) เสมอตามภาพที่ 3
+    // ปรับรูปแบบคำว่า E-POWER ให้ตัว e เป็นตัวเล็ก (e-POWER) เสมอ
     function formatEPower(str) {
       return String(str || '').replace(/e-power/gi, 'e-POWER');
     }
@@ -858,6 +864,7 @@
       if (!state.campaigns || state.campaigns.length === 0) {
         state.campaigns = [
           normalizeCampaign({
+            brand: 'nissan',
             finance: 'นิสสัน ลีสซิ่ง',
             campaignName: 'GENRATE',
             carModel: 'KICKS',
@@ -879,6 +886,7 @@
             }
           }),
           normalizeCampaign({
+            brand: 'nissan',
             finance: 'นิสสัน ลีสซิ่ง',
             campaignName: 'EASY PAY',
             carModel: 'KICKS',
@@ -946,7 +954,6 @@
     function getAvailableMonthsForCampaign(campaignIdx) {
       const cp = state.campaigns[campaignIdx];
       if (!cp) return AVAILABLE_MONTHS;
-      // ตาราง Easy Pay ล็อกเฉพาะ 60 เดือนตามกติกาข้อ 1.1
       if (cp.isEasyPay) return [60];
       if (!cp.rates) return AVAILABLE_MONTHS;
       const allTiers = [...DOWN_TIERS, 0];
@@ -1289,7 +1296,8 @@
       `;
     }
 
-    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน) ====================
+    // ==================== [สิ้นสุดโค้ดชุดที่ 2 — นำโค้ดชุดที่ 3 มาวางต่อจากบรรทัดนี้] ====================
+// ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน) ====================
 
     function renderCalculator() {
       const cardColors = [
@@ -1755,13 +1763,25 @@
       `;
     }
 
-    // ==================== 4. หน้าตั้งค่าระบบ (Settings - ภาพที่ 1, 2, 3, 4 ครบสมบูรณ์) ====================
+    // ==================== 4. หน้าตั้งค่าระบบ (Settings + ระบบ Excel Import/Export ครบวงจร) ====================
+
+    function getCampaignsForCurrentBrand() {
+      const brandId = state.selectedBrand;
+      const brandModels = state.cars.filter(c => c.brand === brandId).map(c => formatEPower(c.model).toUpperCase());
+      return state.campaigns.map((cp, idx) => ({ cp, idx })).filter(({ cp }) => {
+        if (cp.brand && cp.brand === brandId) return true;
+        const m = String(cp.carModel || '').trim().toUpperCase();
+        if (m && brandModels.some(bm => bm === m || m.includes(bm) || bm.includes(m))) return true;
+        return !cp.brand;
+      });
+    }
 
     function renderSettings() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR' };
       const carsForBrand = state.cars.filter(c => c.brand === state.selectedBrand);
       const uniqueModelsForBrand = [...new Set(carsForBrand.map(c => formatEPower(c.model)))];
       const accForBrand = state.accessoriesList.filter(a => a.brand === state.selectedBrand);
+      const brandCampaignsIndexed = getCampaignsForCurrentBrand();
 
       const editingCamp = state.editingCampaignIndex !== null ? state.campaigns[state.editingCampaignIndex] : null;
       const editingCar = state.editingCarId !== null ? state.cars.find(c => c.id == state.editingCarId) : null;
@@ -1783,7 +1803,7 @@
       const easyCol1 = editingCamp && editingCamp.easyCommCol1 !== undefined ? editingCamp.easyCommCol1 : 8;
       const easyCol2 = editingCamp && editingCamp.easyCommCol2 !== undefined ? editingCamp.easyCommCol2 : 16;
 
-      // จัดกลุ่มรุ่นรถตามชื่อ Model เป็นโฟลเดอร์ (ภาพที่ 3)
+      // จัดกลุ่มรุ่นรถตามชื่อ Model เป็นโฟลเดอร์
       const carFoldersMap = {};
       carsForBrand.forEach(car => {
         const mKey = formatEPower(car.model || 'ไม่ระบุรุ่น');
@@ -1791,7 +1811,7 @@
         carFoldersMap[mKey].push(car);
       });
 
-      // จัดกลุ่มอุปกรณ์ตกแต่งตามชื่อ Model เป็นโฟลเดอร์ (ภาพที่ 2)
+      // จัดกลุ่มอุปกรณ์ตกแต่งตามชื่อ Model เป็นโฟลเดอร์
       const accFoldersMap = {};
       accForBrand.forEach(acc => {
         const mKey = formatEPower(acc.model || 'ไม่ระบุรุ่น');
@@ -1811,6 +1831,32 @@
           </header>
 
           <main class="max-w-5xl w-full mx-auto p-3.5 sm:p-6 space-y-6">
+
+            <!-- 0. กล่องจัดการนำเข้า / ส่งออกไฟล์ Excel (.xlsx 3 Sheets) และ CSV ประจำแบรนด์ -->
+            <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-slate-700/80 space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-extrabold">EXCEL / CSV SYNC</span>
+                    <span class="text-xs text-slate-300 font-semibold">เฉพาะข้อมูลแบรนด์: <strong class="text-amber-300">${brandObj.name}</strong></span>
+                  </div>
+                  <h2 class="text-base sm:text-lg font-extrabold tracking-tight">📊 จัดการข้อมูลด้วย Excel (รุ่นรถ • อุปกรณ์ตกแต่ง • ตารางดอกเบี้ย)</h2>
+                  <p class="text-xs text-slate-300 leading-relaxed">
+                    กด <strong>"📤 ส่งออกไฟล์ต้นแบบ"</strong> เพื่อดาวน์โหลดไฟล์ Excel (มี 3 แท็บ: <code class="text-amber-300">1_Cars</code>, <code class="text-amber-300">2_Accessories</code>, <code class="text-amber-300">3_Campaigns</code>) ไปแก้ไขตัวเลขหรือเพิ่มแถวใน Excel แล้วกด <strong>"📥 นำเข้า/อัปเดต"</strong> (ระบบจะอัปเดตทับรายการเดิม + เพิ่มรายการใหม่ให้อัตโนมัติ)
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
+                  <button type="button" onclick="exportBrandExcelTemplate('all')" class="w-full sm:w-auto px-4 py-3 bg-white hover:bg-slate-100 text-slate-900 rounded-2xl text-xs font-extrabold shadow-lg transition-all flex items-center justify-center gap-2">
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                  </button>
+                  <button type="button" onclick="triggerExcelImport('all')" class="w-full sm:w-auto px-4 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl text-xs font-extrabold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                    <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- 1. ตั้งค่าหัวกระดาษบริษัทและที่ปรึกษาการขาย -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4">
               <div class="flex flex-wrap justify-between items-center gap-2">
@@ -1846,14 +1892,22 @@
               </div>
             </div>
 
-            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix + Easy Pay 60 เดือนตามภาพที่ 4) -->
+            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix + Easy Pay 60 เดือน) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="campaignFormSection">
-              <div class="flex justify-between items-center">
+              <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
                   <h3 class="font-bold text-slate-800 text-base">🏦 จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix)</h3>
                   <p class="text-xs text-slate-500">กำหนดประเภท MG, ComPct, ComMaxYears และสลับตารางดอกเบี้ยแบบปกติ / Easy Pay (60 เดือน)</p>
                 </div>
-                ${editingCamp ? `<button onclick="cancelEditCampaign()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" onclick="exportBrandExcelTemplate('campaigns')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                  </button>
+                  <button type="button" onclick="triggerExcelImport('campaigns')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
+                  </button>
+                  ${editingCamp ? `<button onclick="cancelEditCampaign()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+                </div>
               </div>
 
               <!-- แถวบน 4 ช่อง -->
@@ -1919,7 +1973,7 @@
                 <div id="aiUploadStatus"></div>
               </div>
 
-              <!-- ชุดตารางที่ 1: ตารางดอกเบี้ยแบบปกติ (แสดงเมื่อ EASY PAY ไม่ติ๊กถูก) -->
+              <!-- ชุดตารางที่ 1: ตารางดอกเบี้ยแบบปกติ -->
               <div id="standardMatrixWrapper" class="${isEasyPayChecked ? 'hidden' : 'block'} overflow-x-auto pt-2">
                 <table class="w-full text-center border-collapse">
                   <thead>
@@ -1965,7 +2019,7 @@
                 </table>
               </div>
 
-              <!-- ชุดตารางที่ 2: ตารางจัดการอัตราดอกเบี้ย Easy Pay (60 เดือน - แสดงเฉพาะเมื่อติ๊กถูก EASY PAY ตามภาพที่ 4) -->
+              <!-- ชุดตารางที่ 2: ตารางจัดการอัตราดอกเบี้ย Easy Pay (60 เดือน) -->
               <div id="easyPayMatrixWrapper" class="${isEasyPayChecked ? 'block' : 'hidden'} overflow-x-auto pt-2">
                 <div class="max-w-md mx-auto">
                   <table class="w-full text-center border-collapse shadow-sm rounded-2xl overflow-hidden">
@@ -2009,7 +2063,6 @@
                         `;
                       }).join('')}
 
-                      <!-- แถวล่างสุดของ Easy Pay: ดาวน์ 0% / บาท (แก้ได้) -->
                       <tr class="bg-amber-50/60">
                         <td class="p-1.5 border border-amber-300 bg-amber-100/70">
                           <div class="text-[10px] font-bold text-amber-900 mb-0.5">ดาวน์ 0% / บาท (แก้ได้)</div>
@@ -2036,9 +2089,9 @@
               </div>
 
               <div class="pt-4 border-t border-slate-100">
-                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการแคมเปญไฟแนนซ์ในระบบ (${state.campaigns.length} แคมเปญ)</h4>
+                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการแคมเปญไฟแนนซ์ของแบรนด์ ${brandObj.name} (${brandCampaignsIndexed.length} แคมเปญ)</h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  ${state.campaigns.map((cp, idx) => {
+                  ${brandCampaignsIndexed.map(({ cp, idx }) => {
                     const activeTerms = getAvailableMonthsForCampaign(idx);
                     const termRangeLabel = cp.isEasyPay ? '60 เดือน (Easy Pay)' : (activeTerms.length > 0 ? `${activeTerms[0]}-${activeTerms[activeTerms.length - 1]} ด.` : '24-96 ด.');
                     const mgLabel = MG_TYPE_LABELS[cp.mgType || 'normal'] || 'MG ปกติ';
@@ -2073,11 +2126,19 @@
               </div>
             </div>
 
-            <!-- 3. จัดการรุ่นรถและสีตัวถัง (จัดเรียง MG 3 ช่องแถวบน + ประกัน/ทะเบียน/ปุ่มบันทึกแถวล่างตามภาพที่ 1 และรวมโฟลเดอร์ตามภาพที่ 3) -->
+            <!-- 3. จัดการรุ่นรถและสีตัวถัง (พร้อมปุ่ม Export / Import ประจำหมวด) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="carFormSection">
-              <div class="flex justify-between items-center">
+              <div class="flex flex-wrap justify-between items-center gap-2">
                 <h3 class="font-bold text-slate-800 text-base">🚗 จัดการรุ่นรถและสีตัวถัง (${brandObj.name})</h3>
-                ${editingCar ? `<button onclick="cancelEditCar()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" onclick="exportBrandExcelTemplate('cars')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                  </button>
+                  <button type="button" onclick="triggerExcelImport('cars')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
+                  </button>
+                  ${editingCar ? `<button onclick="cancelEditCar()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+                </div>
               </div>
 
               <form onsubmit="addNewCarModel(event)" class="space-y-4">
@@ -2110,7 +2171,7 @@
                   <button type="button" onclick="addColorRow()" class="text-xs text-blue-600 font-bold hover:underline mt-2.5 inline-block">+ เพิ่มตัวเลือกสีรถ</button>
                 </div>
 
-                <!-- จัดเรียงใหม่ตามภาพที่ 1 เป๊ะ: แถวบน MG 3 ช่อง | แถวล่าง ประกัน + ทะเบียน + ปุ่มบันทึก -->
+                <!-- แถวบน MG 3 ช่อง | แถวล่าง ประกัน + ทะเบียน + ปุ่มบันทึก -->
                 <div class="pt-3 border-t border-slate-100 space-y-3">
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
@@ -2145,7 +2206,7 @@
                 </div>
               </form>
 
-              <!-- รายการรุ่นรถจัดรวมเป็นโฟลเดอร์ตามชื่อรุ่น (Model) ตามภาพที่ 3 -->
+              <!-- รายการรุ่นรถจัดรวมเป็นโฟลเดอร์ตามชื่อรุ่น (Model) -->
               <div class="pt-6 border-t border-slate-100 space-y-3">
                 <div class="flex justify-between items-center">
                   <h4 class="font-bold text-slate-700 text-xs">📋 รายการรุ่นรถของแบรนด์ ${brandObj.name} (${carsForBrand.length} รายการ • จัดกลุ่มตามโฟลเดอร์รุ่นรถ)</h4>
@@ -2219,14 +2280,22 @@
               </div>
             </div>
 
-            <!-- 4. จัดการอุปกรณ์ตกแต่ง (จัดรวมเป็นโฟลเดอร์ตามชื่อรุ่น Model ตามภาพที่ 2) -->
+            <!-- 4. จัดการอุปกรณ์ตกแต่ง (พร้อมปุ่ม Export / Import ประจำหมวด) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="accessoryFormSection">
-              <div class="flex justify-between items-center">
+              <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
                   <h3 class="font-bold text-slate-800 text-base">🎁 จัดการอุปกรณ์ตกแต่ง (${brandObj.name})</h3>
                   <p class="text-xs text-slate-500">บันทึกฐานข้อมูลอุปกรณ์ตกแต่งแยกตามรุ่นรถ จัดเก็บเป็นโฟลเดอร์ตามรุ่นเพื่อให้เปิดแก้ไข/เพิ่ม-ลบได้สะดวก</p>
                 </div>
-                ${editingAcc ? `<button onclick="cancelEditAccessory()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" onclick="exportBrandExcelTemplate('accessories')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                  </button>
+                  <button type="button" onclick="triggerExcelImport('accessories')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
+                  </button>
+                  ${editingAcc ? `<button onclick="cancelEditAccessory()" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100">✕ ยกเลิกการแก้ไข</button>` : ''}
+                </div>
               </div>
 
               <form onsubmit="saveAccessoryItem(event)" class="space-y-4">
@@ -2261,7 +2330,7 @@
                 </div>
               </form>
 
-              <!-- รายการอุปกรณ์ตกแต่งจัดรวมเป็นโฟลเดอร์ตามชื่อรุ่น (Model) ตามภาพที่ 2 -->
+              <!-- รายการอุปกรณ์ตกแต่งจัดรวมเป็นโฟลเดอร์ตามชื่อรุ่น (Model) -->
               <div class="pt-4 border-t border-slate-100 space-y-3">
                 <div class="flex justify-between items-center">
                   <h4 class="font-bold text-slate-700 text-xs">📋 รายการอุปกรณ์ตกแต่งของแบรนด์ ${brandObj.name} (${accForBrand.length} รายการ • จัดกลุ่มตามโฟลเดอร์รุ่นรถ)</h4>
@@ -2328,7 +2397,8 @@
         </div>
       `;
     }
-    // ==================== [สิ้นสุดโค้ดชุดที่ 2 — นำโค้ดชุดที่ 3 มาวางต่อจากบรรทัดนี้] ====================
+
+    // ==================== [สิ้นสุดโค้ดชุดที่ 3 — นำโค้ดชุดที่ 4 มาวางต่อจากบรรทัดนี้] ====================
 // ==================== CORE LOGIC, MG TYPE RESOLUTION & FORMULAS ====================
 
     function getAccessoriesForCurrentModel() {
@@ -2535,7 +2605,6 @@
 
     function getCommRateAdjustment(plan) {
       const cp = state.campaigns[plan.campaignIdx] || state.campaigns[0];
-      // หากเป็นตาราง Easy Pay จะดึงเรทจากคอลัมน์ค่าคอมโดยตรง ไม่ต้องบวกลบขั้นเพิ่ม
       if (cp && cp.isEasyPay) return 0;
 
       const baseComm = (cp && cp.comPct !== undefined) ? Number(cp.comPct) : 8;
@@ -2561,7 +2630,6 @@
       if (!cp) return 2.79;
       const downPctVal = num(plan.downPct);
 
-      // กรณีแคมเปญ Easy Pay (60 เดือน 2 คอลัมน์ค่าคอม เช่น คอม 8% / คอม 16% ตามภาพที่ 4)
       if (cp.isEasyPay && cp.easyRates) {
         let matchedEasyTier = 5;
         if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) {
@@ -2588,7 +2656,6 @@
         return 2.59;
       }
 
-      // กรณีตารางเช่าซื้อมาตรฐาน
       if (!cp.rates) return 2.79;
       let matchedTier = 5;
       if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) {
@@ -3833,7 +3900,8 @@
       document.getElementById('marginModal').classList.add('hidden');
     }
 
-    // ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1 & 2) & DUAL A4 RENDERERS ====================
+    // ==================== [สิ้นสุดโค้ดชุดที่ 4 — นำโค้ดชุดที่ 5 มาวางต่อจากบรรทัดนี้] ====================
+// ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1 & 2) & DUAL A4 RENDERERS ====================
 
     function selectPrintTemplate(tplNum) {
       state.printTemplate = tplNum === 2 ? 2 : 1;
@@ -4085,7 +4153,7 @@
       setTimeout(() => { window.print(); }, 250);
     }
 
-    // ==================== รูปแบบที่ 1: ใบเสนอราคามาตรฐาน (แบบเดิมที่มีอยู่แล้ว) ====================
+    // ==================== รูปแบบที่ 1: ใบเสนอราคามาตรฐาน ====================
 
     function buildQuotationTemplate1Html(ctx) {
       const cType = state.deliveryFees.customerType || 'individual';
@@ -4352,7 +4420,7 @@
       `;
     }
 
-    // ==================== รูปแบบที่ 2: ใบเสนอราคาทางการ สไตล์บริษัทใหญ่ หรูหรา มินิมอล พรีเมียม (พอดี 1 หน้า A4 ไม่มีช่องเซ็นชื่อ) ====================
+    // ==================== รูปแบบที่ 2: ใบเสนอราคาทางการ สไตล์บริษัทใหญ่ หรูหรา มินิมอล พรีเมียม ====================
 
     function buildQuotationTemplate2Html(ctx) {
       const cType = state.deliveryFees.customerType || 'individual';
@@ -4506,7 +4574,6 @@
       }).join('');
 
       return `
-        <!-- Executive Dark Header Banner -->
         <div class="bg-slate-900 text-white rounded-2xl p-3.5 mb-2.5 flex justify-between items-center border-b-4 border-amber-500">
           <div class="flex items-center gap-3">
             <div class="w-12 h-12 rounded-xl bg-white p-1.5 flex items-center justify-center shadow-sm">
@@ -4525,7 +4592,6 @@
           </div>
         </div>
 
-        <!-- Client & Consultant Two-Column Minimalist Cards -->
         <div class="grid grid-cols-2 gap-2.5 mb-2.5 text-[9.5px]">
           <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-0.5">
             <div class="text-[8.5px] font-extrabold tracking-widest text-slate-400 uppercase border-b border-slate-200 pb-0.5 mb-1">ข้อมูลลูกค้าและรถยนต์ (CLIENT & VEHICLE)</div>
@@ -4543,7 +4609,6 @@
           </div>
         </div>
 
-        <!-- 01 / Vehicle Pricing Structure -->
         <div class="mb-2.5">
           <div class="flex items-center justify-between mb-1">
             <span class="text-[9.5px] font-extrabold tracking-widest uppercase text-slate-800">01 / โครงสร้างราคารถยนต์สุทธิ (VEHICLE PRICING STRUCTURE)</span>
@@ -4579,10 +4644,8 @@
           </table>
         </div>
 
-        <!-- 02 / Mode Specific Finance Table -->
         ${modeSectionHtml}
 
-        <!-- 03 / Delivery Payment Summary -->
         <div class="mb-2.5">
           <div class="flex items-center justify-between mb-1">
             <span class="text-[9.5px] font-extrabold tracking-widest uppercase text-slate-800">${state.step === 'cash' ? '02' : '03'} / สรุปยอดเงินชำระวันรับรถสุทธิ (DELIVERY SETTLEMENT SUMMARY)</span>
@@ -4598,7 +4661,6 @@
           </table>
         </div>
 
-        <!-- Bottom Grid: Freebies & Required Documents (พอดี 1 หน้า A4 ไม่มีช่องเซ็นชื่อ) -->
         <div class="grid ${state.step === 'cash' ? 'grid-cols-1' : 'grid-cols-2'} gap-2.5 mb-1.5">
           <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70">
             <div class="text-[9px] font-extrabold tracking-wider text-slate-900 uppercase border-b border-slate-200 pb-0.5 mb-1">🎁 รายการของแถมและสิทธิพิเศษ (COMPLIMENTARY PRIVILEGES)</div>
@@ -4617,6 +4679,462 @@
           <span class="font-semibold text-slate-500">${state.company.name}</span>
         </div>
       `;
+    }
+
+    // ==================== EXCEL / CSV EXPORT & IMPORT (UPSERT / MERGE BY BRAND) ====================
+
+    function formatColorsForExcel(colorsArr) {
+      if (!Array.isArray(colorsArr) || colorsArr.length === 0) return 'สีมาตรฐาน:0';
+      return colorsArr.map(c => `${c.name}:${num(c.price)}`).join(' | ');
+    }
+
+    function parseColorsFromExcelString(rawStr) {
+      const str = String(rawStr || '').trim();
+      if (!str) return [{ name: 'สีมาตรฐาน', price: 0 }];
+      const parts = str.split('|').map(s => s.trim()).filter(Boolean);
+      const result = [];
+      parts.forEach(p => {
+        const idx = p.lastIndexOf(':');
+        if (idx !== -1) {
+          const cName = p.slice(0, idx).trim();
+          const cPrice = num(p.slice(idx + 1));
+          if (cName) result.push({ name: cName, price: cPrice });
+        } else {
+          result.push({ name: p, price: 0 });
+        }
+      });
+      return result.length > 0 ? result : [{ name: 'สีมาตรฐาน', price: 0 }];
+    }
+
+    function exportBrandExcelTemplate(scope = 'all') {
+      if (typeof XLSX === 'undefined') {
+        alert('กำลังโหลดไลบรารี Excel กรุณารอสักครู่แล้วกดอีกครั้ง');
+        return;
+      }
+
+      const brandId = state.selectedBrand || 'nissan';
+      const brandObj = BRANDS.find(b => b.id === brandId) || { name: brandId.toUpperCase() };
+      const wb = XLSX.utils.book_new();
+
+      // 1. Sheet: 1_Cars (เฉพาะแบรนด์ที่เลือก)
+      if (scope === 'all' || scope === 'cars') {
+        const brandCars = state.cars.filter(c => c.brand === brandId);
+        const carsRows = brandCars.length > 0 ? brandCars.map(c => ({
+          'แบรนด์ (Brand)': brandId,
+          'ชื่อรุ่นรถ (Model)': formatEPower(c.model),
+          'เกรด / รุ่นย่อย (Grade)': formatEPower(c.grade),
+          'ราคารถตั้งต้น (Price)': num(c.price),
+          'MG ปกติ (MG_Normal)': num(c.mgNormal ?? c.mg ?? 115000),
+          'MG พิเศษ (MG_Special)': num(c.mgSpecial ?? c.mgNormal ?? 95000),
+          'MG other-ซื้อสด (MG_Other)': num(c.mgOther ?? 92000),
+          'ค่าประกันภัยชั้น 1 (Insurance)': num(c.insurance ?? 18900),
+          'ค่าจดทะเบียน (RegFee)': num(c.regFee ?? 3500),
+          'สีและค่าสี (Colors รูปแบบ ชื่อสี:ราคา คั่นด้วย |)': formatColorsForExcel(c.colors)
+        })) : [{
+          'แบรนด์ (Brand)': brandId,
+          'ชื่อรุ่นรถ (Model)': 'MODEL_EXAMPLE',
+          'เกรด / รุ่นย่อย (Grade)': 'STANDARD',
+          'ราคารถตั้งต้น (Price)': 899000,
+          'MG ปกติ (MG_Normal)': 100000,
+          'MG พิเศษ (MG_Special)': 80000,
+          'MG other-ซื้อสด (MG_Other)': 90000,
+          'ค่าประกันภัยชั้น 1 (Insurance)': 18900,
+          'ค่าจดทะเบียน (RegFee)': 3500,
+          'สีและค่าสี (Colors รูปแบบ ชื่อสี:ราคา คั่นด้วย |)': 'สีมาตรฐาน:0 | สีขาวมุก:10000'
+        }];
+
+        const wsCars = XLSX.utils.json_to_sheet(carsRows);
+        wsCars['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 42 }];
+        XLSX.utils.book_append_sheet(wb, wsCars, '1_Cars');
+      }
+
+      // 2. Sheet: 2_Accessories (เฉพาะแบรนด์ที่เลือก)
+      if (scope === 'all' || scope === 'accessories') {
+        const brandAcc = state.accessoriesList.filter(a => a.brand === brandId);
+        const accRows = brandAcc.length > 0 ? brandAcc.map(a => ({
+          'แบรนด์ (Brand)': brandId,
+          'ชื่อรุ่นรถ (Model)': formatEPower(a.model),
+          'ชื่ออุปกรณ์ตกแต่ง (Accessory_Name)': a.name,
+          'ราคาต้นทุน (Price)': num(a.price),
+          'ติ๊กเลือกเริ่มต้น (Default_Checked: YES/NO)': a.defaultChecked !== false ? 'YES' : 'NO'
+        })) : [{
+          'แบรนด์ (Brand)': brandId,
+          'ชื่อรุ่นรถ (Model)': 'MODEL_EXAMPLE',
+          'ชื่ออุปกรณ์ตกแต่ง (Accessory_Name)': 'ฟิล์มเซรามิก',
+          'ราคาต้นทุน (Price)': 3500,
+          'ติ๊กเลือกเริ่มต้น (Default_Checked: YES/NO)': 'YES'
+        }];
+
+        const wsAcc = XLSX.utils.json_to_sheet(accRows);
+        wsAcc['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 30 }, { wch: 18 }, { wch: 32 }];
+        XLSX.utils.book_append_sheet(wb, wsAcc, '2_Accessories');
+      }
+
+      // 3. Sheet: 3_Campaigns (เฉพาะแบรนด์ที่เลือก โดย 1 แคมเปญ = 7 แถวตามขั้นเงินดาวน์ 30,25,20,15,10,5,0)
+      if (scope === 'all' || scope === 'campaigns') {
+        const brandCamps = getCampaignsForCurrentBrand().map(item => item.cp);
+        const campRows = [];
+
+        const campsToExport = brandCamps.length > 0 ? brandCamps : [normalizeCampaign({
+          brand: brandId,
+          finance: 'ไฟแนนซ์ตัวอย่าง',
+          campaignName: 'STANDARD',
+          carModel: 'MODEL_EXAMPLE',
+          isEasyPay: false,
+          balloonPct: 30,
+          mgType: 'normal',
+          comPct: 8,
+          comMaxYears: 5,
+          commOptionsText: '0%, 4%, 8%, 10%, 12%',
+          specialDownLabel: '-',
+          rates: {
+            30: { 24: 1.79, 36: 1.89, 48: 1.99, 60: 2.39, 72: 2.69, 84: 2.99, 96: null },
+            25: { 24: 1.79, 36: 1.89, 48: 1.99, 60: 2.39, 72: 2.69, 84: 2.99, 96: null },
+            20: { 24: 1.89, 36: 1.99, 48: 2.15, 60: 2.49, 72: 2.79, 84: 3.15, 96: null },
+            15: { 24: 1.99, 36: 2.09, 48: 2.35, 60: 2.65, 72: 2.95, 84: 3.35, 96: null },
+            10: { 24: 2.19, 36: 2.29, 48: 2.65, 60: 2.95, 72: 3.25, 84: 3.65, 96: null },
+            5:  { 24: 2.39, 36: 2.49, 48: 2.95, 60: 3.25, 72: 3.55, 84: 3.95, 96: null },
+            0:  { 24: null, 36: null, 48: null, 60: null, 72: null, 84: null, 96: null }
+          }
+        })];
+
+        campsToExport.forEach(cp => {
+          const tiers = cp.isEasyPay ? [...EASY_PAY_DOWN_TIERS, 0] : [...DOWN_TIERS, 0];
+          tiers.forEach(tier => {
+            const rStd = (cp.rates && cp.rates[tier]) ? cp.rates[tier] : {};
+            const rEasy = (cp.easyRates && cp.easyRates[tier]) ? cp.easyRates[tier] : {};
+            campRows.push({
+              'แบรนด์ (Brand)': brandId,
+              'บริษัทไฟแนนซ์ (Finance)': cp.finance || '',
+              'ชื่อแคมเปญ (Campaign_Name)': cp.campaignName || cp.name || 'STANDARD',
+              'ชื่อรุ่นรถ (Car_Model)': formatEPower(cp.carModel || ''),
+              'รูปแบบ MG (MG_Type: normal/special/other)': cp.mgType || 'normal',
+              'เป็น EasyPay (Is_EasyPay: YES/NO)': cp.isEasyPay ? 'YES' : 'NO',
+              '% บอลลูน (Balloon_Pct)': num(cp.balloonPct ?? 30),
+              'ComPct (คอมตาราง %)': num(cp.comPct ?? 8),
+              'ComMaxYears (ปีสูงสุด)': num(cp.comMaxYears ?? 5),
+              'ชุด % ค่าคอม (Comm_Options)': cp.commOptionsText || '0%, 4%, 8%, 10%, 12%',
+              'ป้ายดาวน์พิเศษแถว 0 (Special_Down_Label)': cp.specialDownLabel || '-',
+              'ขั้นเงินดาวน์ (Down_Tier)': tier,
+              '24 เดือน (M24)': (rStd[24] !== null && rStd[24] !== undefined) ? rStd[24] : '-',
+              '36 เดือน (M36)': (rStd[36] !== null && rStd[36] !== undefined) ? rStd[36] : '-',
+              '48 เดือน (M48)': (rStd[48] !== null && rStd[48] !== undefined) ? rStd[48] : '-',
+              '60 เดือน (M60)': (rStd[60] !== null && rStd[60] !== undefined) ? rStd[60] : '-',
+              '72 เดือน (M72)': (rStd[72] !== null && rStd[72] !== undefined) ? rStd[72] : '-',
+              '84 เดือน (M84)': (rStd[84] !== null && rStd[84] !== undefined) ? rStd[84] : '-',
+              '96 เดือน (M96)': (rStd[96] !== null && rStd[96] !== undefined) ? rStd[96] : '-',
+              'EasyPay คอมคอลัมน์ 1 % (Easy_Comm1_Pct)': num(cp.easyCommCol1 ?? 8),
+              'EasyPay เรทคอลัมน์ 1 (Easy_Rate_Col1)': (rEasy.col1 !== null && rEasy.col1 !== undefined) ? rEasy.col1 : '-',
+              'EasyPay คอมคอลัมน์ 2 % (Easy_Comm2_Pct)': num(cp.easyCommCol2 ?? 16),
+              'EasyPay เรทคอลัมน์ 2 (Easy_Rate_Col2)': (rEasy.col2 !== null && rEasy.col2 !== undefined) ? rEasy.col2 : '-'
+            });
+          });
+        });
+
+        const wsCamps = XLSX.utils.json_to_sheet(campRows);
+        wsCamps['!cols'] = [
+          { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 24 },
+          { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 22 },
+          { wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+          { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 20 },
+          { wch: 20 }, { wch: 20 }, { wch: 20 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsCamps, '3_Campaigns');
+      }
+
+      const suffix = scope === 'all' ? 'ALL_3SHEETS' : scope.toUpperCase();
+      const dateTag = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `${brandObj.name}_TEMPLATE_${suffix}_${dateTag}.xlsx`);
+    }
+
+    function triggerExcelImport(mode = 'all') {
+      state.pendingImportMode = mode;
+      const fileInp = document.getElementById('globalExcelImportInput');
+      if (fileInp) {
+        fileInp.value = '';
+        fileInp.click();
+      }
+    }
+
+    function getRowVal(row, keysList, fallback = '') {
+      for (const k of Object.keys(row)) {
+        const cleanK = k.trim().toLowerCase();
+        for (const target of keysList) {
+          if (cleanK === target.toLowerCase() || cleanK.includes(target.toLowerCase())) {
+            return row[k];
+          }
+        }
+      }
+      return fallback;
+    }
+
+    function parseRateCell(val) {
+      if (val === null || val === undefined) return null;
+      const s = String(val).trim();
+      if (s === '' || s === '-') return null;
+      const p = parseFloat(s);
+      return isNaN(p) ? null : p;
+    }
+
+    function upsertCarsFromSheetRows(rows, brandId) {
+      let updatedCount = 0;
+      let addedCount = 0;
+
+      rows.forEach(row => {
+        const rawModel = String(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], '')).trim();
+        const rawGrade = String(getRowVal(row, ['เกรด', 'Grade'], '')).trim();
+        if (!rawModel || !rawGrade || rawModel === 'MODEL_EXAMPLE') return;
+
+        const model = formatEPower(rawModel.toUpperCase());
+        const grade = formatEPower(rawGrade.toUpperCase());
+        const price = num(getRowVal(row, ['ราคารถตั้งต้น', 'Price'], 0));
+        const mgNormal = num(getRowVal(row, ['MG ปกติ', 'MG_Normal'], 115000));
+        const mgSpecial = num(getRowVal(row, ['MG พิเศษ', 'MG_Special'], mgNormal));
+        const mgOther = num(getRowVal(row, ['MG other', 'MG_Other'], mgNormal));
+        const insurance = num(getRowVal(row, ['ค่าประกันภัย', 'Insurance'], 18900));
+        const regFee = num(getRowVal(row, ['ค่าจดทะเบียน', 'RegFee'], 3500));
+        const colorsStr = getRowVal(row, ['สีและค่าสี', 'Colors'], 'สีมาตรฐาน:0');
+        const colors = parseColorsFromExcelString(colorsStr);
+
+        const existing = state.cars.find(c =>
+          c.brand === brandId &&
+          formatEPower(c.model).toUpperCase() === model.toUpperCase() &&
+          formatEPower(c.grade).toUpperCase() === grade.toUpperCase()
+        );
+
+        if (existing) {
+          existing.price = price;
+          existing.mgNormal = mgNormal;
+          existing.mgSpecial = mgSpecial;
+          existing.mgOther = mgOther;
+          existing.mg = mgNormal;
+          existing.insurance = insurance;
+          existing.regFee = regFee;
+          existing.colors = colors;
+          updatedCount++;
+        } else {
+          state.cars.push(normalizeCar({
+            id: Date.now() + Math.floor(Math.random() * 100000),
+            brand: brandId,
+            model,
+            grade,
+            price,
+            mgNormal,
+            mgSpecial,
+            mgOther,
+            mg: mgNormal,
+            insurance,
+            regFee,
+            colors
+          }));
+          addedCount++;
+        }
+        state.expandedCarFolders[model] = true;
+      });
+
+      return { updatedCount, addedCount };
+    }
+
+    function upsertAccessoriesFromSheetRows(rows, brandId) {
+      let updatedCount = 0;
+      let addedCount = 0;
+
+      rows.forEach(row => {
+        const rawModel = String(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], '')).trim();
+        const rawName = String(getRowVal(row, ['ชื่ออุปกรณ์', 'Accessory_Name'], '')).trim();
+        if (!rawModel || !rawName || rawModel === 'MODEL_EXAMPLE') return;
+
+        const model = formatEPower(rawModel.toUpperCase());
+        const price = num(getRowVal(row, ['ราคาต้นทุน', 'Price'], 0));
+        const chkRaw = String(getRowVal(row, ['ติ๊กเลือกเริ่มต้น', 'Default_Checked'], 'YES')).trim().toUpperCase();
+        const defaultChecked = !(chkRaw === 'NO' || chkRaw === 'FALSE' || chkRaw === '0');
+
+        const existing = state.accessoriesList.find(a =>
+          a.brand === brandId &&
+          formatEPower(a.model).toUpperCase() === model.toUpperCase() &&
+          a.name.trim().toUpperCase() === rawName.toUpperCase()
+        );
+
+        if (existing) {
+          existing.price = price;
+          existing.defaultChecked = defaultChecked;
+          state.margin.selectedAccMap[existing.id] = defaultChecked;
+          updatedCount++;
+        } else {
+          const newId = Date.now() + Math.floor(Math.random() * 100000);
+          state.accessoriesList.push({
+            id: newId,
+            brand: brandId,
+            model,
+            name: rawName,
+            price,
+            defaultChecked
+          });
+          state.margin.selectedAccMap[newId] = defaultChecked;
+          addedCount++;
+        }
+        state.expandedAccFolders[model] = true;
+      });
+
+      return { updatedCount, addedCount };
+    }
+
+    function upsertCampaignsFromSheetRows(rows, brandId) {
+      let updatedCount = 0;
+      let addedCount = 0;
+
+      // จัดกลุ่มแถวตาม (Finance + Campaign_Name + Car_Model + Is_EasyPay)
+      const groupedMap = {};
+
+      rows.forEach(row => {
+        const finance = String(getRowVal(row, ['บริษัทไฟแนนซ์', 'Finance'], '')).trim();
+        const campaignName = String(getRowVal(row, ['ชื่อแคมเปญ', 'Campaign_Name'], '')).trim().toUpperCase();
+        const carModel = formatEPower(String(getRowVal(row, ['ชื่อรุ่นรถ', 'Car_Model'], '')).trim().toUpperCase());
+        if (!finance || (!campaignName && !carModel) || carModel === 'MODEL_EXAMPLE') return;
+
+        const easyRaw = String(getRowVal(row, ['เป็น EasyPay', 'Is_EasyPay'], 'NO')).trim().toUpperCase();
+        const isEasyPay = (easyRaw === 'YES' || easyRaw === 'TRUE' || easyRaw === '1');
+        const key = `${finance.toUpperCase()}||${campaignName}||${carModel.toUpperCase()}||${isEasyPay ? 'EASY' : 'STD'}`;
+
+        if (!groupedMap[key]) {
+          const mgTypeRaw = String(getRowVal(row, ['รูปแบบ MG', 'MG_Type'], 'normal')).trim().toLowerCase();
+          const mgType = ['normal', 'special', 'other'].includes(mgTypeRaw) ? mgTypeRaw : 'normal';
+          const balloonPct = num(getRowVal(row, ['% บอลลูน', 'Balloon_Pct'], 30)) || 30;
+          const comPct = num(getRowVal(row, ['ComPct'], 8));
+          const comMaxYears = Math.min(Math.max(num(getRowVal(row, ['ComMaxYears'], 5)) || 5, 1), 8);
+          const commOptionsText = String(getRowVal(row, ['ชุด % ค่าคอม', 'Comm_Options'], '0%, 4%, 8%, 10%, 12%')).trim();
+          const specialDownLabel = String(getRowVal(row, ['ป้ายดาวน์พิเศษ', 'Special_Down_Label'], '-')).trim() || '-';
+          const easyCommCol1 = num(getRowVal(row, ['Easy_Comm1_Pct', 'คอมคอลัมน์ 1'], comPct || 8));
+          const easyCommCol2 = num(getRowVal(row, ['Easy_Comm2_Pct', 'คอมคอลัมน์ 2'], 16));
+
+          const emptyRates = {};
+          [...DOWN_TIERS, 0].forEach(d => {
+            emptyRates[d] = { 24: null, 36: null, 48: null, 60: null, 72: null, 84: null, 96: null };
+          });
+
+          groupedMap[key] = {
+            brand: brandId,
+            finance,
+            campaignName: campaignName || (isEasyPay ? 'EASY PAY' : 'STANDARD'),
+            carModel,
+            mgType,
+            isEasyPay,
+            balloonPct,
+            comPct: isEasyPay ? easyCommCol1 : comPct,
+            comMaxYears,
+            commOptionsText,
+            specialDownLabel,
+            easyCommCol1,
+            easyCommCol2,
+            rates: emptyRates,
+            easyRates: createEmptyEasyPayRates()
+          };
+        }
+
+        const cpGroup = groupedMap[key];
+        const tier = num(getRowVal(row, ['ขั้นเงินดาวน์', 'Down_Tier'], 25));
+
+        if ([...DOWN_TIERS, 0].includes(tier)) {
+          AVAILABLE_MONTHS.forEach(m => {
+            const cellVal = getRowVal(row, [`M${m}`, `${m} เดือน`], null);
+            const parsed = parseRateCell(cellVal);
+            if (parsed !== null) {
+              cpGroup.rates[tier][m] = parsed;
+            }
+          });
+        }
+
+        if ([...EASY_PAY_DOWN_TIERS, 0].includes(tier)) {
+          const c1Val = parseRateCell(getRowVal(row, ['Easy_Rate_Col1', 'เรทคอลัมน์ 1'], null));
+          const c2Val = parseRateCell(getRowVal(row, ['Easy_Rate_Col2', 'เรทคอลัมน์ 2'], null));
+          if (c1Val !== null) cpGroup.easyRates[tier].col1 = c1Val;
+          if (c2Val !== null) cpGroup.easyRates[tier].col2 = c2Val;
+        }
+      });
+
+      Object.values(groupedMap).forEach(rawCp => {
+        const normalized = normalizeCampaign(rawCp);
+        const existingIdx = state.campaigns.findIndex(c =>
+          c.finance.trim().toUpperCase() === normalized.finance.trim().toUpperCase() &&
+          (c.campaignName || '').trim().toUpperCase() === normalized.campaignName.trim().toUpperCase() &&
+          formatEPower(c.carModel || '').toUpperCase() === formatEPower(normalized.carModel || '').toUpperCase() &&
+          Boolean(c.isEasyPay) === Boolean(normalized.isEasyPay)
+        );
+
+        if (existingIdx !== -1) {
+          state.campaigns[existingIdx] = normalized;
+          updatedCount++;
+        } else {
+          state.campaigns.push(normalized);
+          addedCount++;
+        }
+      });
+
+      return { updatedCount, addedCount };
+    }
+
+    function handleExcelImportFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (typeof XLSX === 'undefined') {
+        alert('ยังโหลดไลบรารี Excel ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง');
+        return;
+      }
+
+      const brandId = state.selectedBrand || 'nissan';
+      const brandObj = BRANDS.find(b => b.id === brandId) || { name: brandId.toUpperCase() };
+      const reader = new FileReader();
+
+      reader.onload = e => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          let summaryLines = [];
+
+          workbook.SheetNames.forEach(sheetName => {
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+            if (!rows || rows.length === 0) return;
+
+            const sLower = sheetName.toLowerCase();
+            const firstRowKeys = Object.keys(rows[0]).join(' ').toLowerCase();
+
+            // ตรวจจับว่าเป็น Sheet รุ่นรถ, อุปกรณ์ตกแต่ง หรือ แคมเปญดอกเบี้ย
+            if (sLower.includes('car') || firstRowKeys.includes('mg_normal') || firstRowKeys.includes('ราคารถตั้งต้น')) {
+              const res = upsertCarsFromSheetRows(rows, brandId);
+              if (res.updatedCount > 0 || res.addedCount > 0) {
+                summaryLines.push(`🚗 รุ่นรถและสีตัวถัง: อัปเดตทับ ${res.updatedCount} รายการ | เพิ่มใหม่ ${res.addedCount} รายการ`);
+              }
+            } else if (sLower.includes('acc') || firstRowKeys.includes('accessory_name') || firstRowKeys.includes('ชื่ออุปกรณ์')) {
+              const res = upsertAccessoriesFromSheetRows(rows, brandId);
+              if (res.updatedCount > 0 || res.addedCount > 0) {
+                summaryLines.push(`🎁 อุปกรณ์ตกแต่ง: อัปเดตทับ ${res.updatedCount} รายการ | เพิ่มใหม่ ${res.addedCount} รายการ`);
+              }
+            } else if (sLower.includes('camp') || firstRowKeys.includes('down_tier') || firstRowKeys.includes('บริษัทไฟแนนซ์')) {
+              const res = upsertCampaignsFromSheetRows(rows, brandId);
+              if (res.updatedCount > 0 || res.addedCount > 0) {
+                summaryLines.push(`🏦 แคมเปญและตารางดอกเบี้ย: อัปเดตทับ ${res.updatedCount} แคมเปญ | เพิ่มใหม่ ${res.addedCount} แคมเปญ`);
+              }
+            }
+          });
+
+          if (summaryLines.length === 0) {
+            alert('⚠️ ไม่พบข้อมูลที่ตรงกับโครงสร้างตาราง กรุณากดปุ่ม "📤 ส่งออกไฟล์ต้นแบบ" เพื่อดูหัวคอลัมน์มาตรฐาน');
+            return;
+          }
+
+          ensureValidTermsForPlans();
+          saveToStorage();
+          render();
+          alert(`✅ นำเข้าและอัปเดตข้อมูลแบรนด์ ${brandObj.name} สำเร็จ!\n\n` + summaryLines.join('\n'));
+        } catch (err) {
+          console.error('Excel Import Error:', err);
+          alert('❌ เกิดข้อผิดพลาดในการอ่านไฟล์ Excel/CSV กรุณาตรวจสอบรูปแบบไฟล์');
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
     }
 
     // ==================== SETTINGS FUNCTIONS (CARS FOLDERS, ACCESSORIES FOLDERS, EASY PAY MATRIX) ====================
@@ -4806,6 +5324,7 @@
         : parseCommOptionsList(rawCommOptionsText, comPct);
 
       const campaignData = normalizeCampaign({
+        brand: state.selectedBrand,
         finance,
         campaignName: finalCampName,
         carModel: finalCarModel,
@@ -4863,7 +5382,7 @@
       }
     }
 
-    // ==================== CAR FOLDERS & CRUD (ภาพที่ 1 และ ภาพที่ 3) ====================
+    // ==================== CAR FOLDERS & CRUD ====================
 
     function toggleCarFolder(modelKey) {
       state.expandedCarFolders[modelKey] = !state.expandedCarFolders[modelKey];
@@ -4964,7 +5483,7 @@
       }
     }
 
-    // ==================== ACCESSORIES FOLDERS & CRUD (ภาพที่ 2) ====================
+    // ==================== ACCESSORIES FOLDERS & CRUD ====================
 
     function toggleAccFolder(modelKey) {
       state.expandedAccFolders[modelKey] = !state.expandedAccFolders[modelKey];
