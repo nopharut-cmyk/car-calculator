@@ -611,7 +611,7 @@
       step: 'login', // 'login' | 'brand' | 'calc' | 'balloon' | 'cash' | 'settings'
       auth: {
         token: '',
-        user: null, // { id, email, fullName, phone, lineId, roleTier, showroomId, showroomName, allowedBrands, canChangeBrand }
+        user: null,
         showrooms: [],
         activeShowroomId: 'sr_mega_tiwanon',
         brandDraftSelection: []
@@ -628,10 +628,13 @@
       discount: 0,
       accessories: 0,
       driveOffInputText: '',
-      printTemplate: 1, // 1 = รูปแบบที่ 1 (มาตรฐาน), 2 = รูปแบบที่ 2 (Executive Luxury A4)
-      pendingImportMode: 'all', // 'all' | 'cars' | 'accessories' | 'campaigns'
-      expandedCarFolders: {},
-      expandedAccFolders: {},
+      printTemplate: 1,
+      pendingImportMode: 'all',
+      // สถานะโฟลเดอร์: พับปิดเริ่มต้นทั้งหมด ({}) เพื่อความเป็นระเบียบ
+      expandedFinanceFolders: {},      // ชั้นที่ 1: { [finKey]: true/false }
+      expandedCampaignSubFolders: {},  // ชั้นที่ 2: { [`${finKey}||${campKey}`]: true/false }
+      expandedCarFolders: {},          // โฟลเดอร์รุ่นรถ: { [modelKey]: true/false }
+      expandedAccFolders: {},          // โฟลเดอร์อุปกรณ์ตกแต่ง: { [modelKey]: true/false }
       brandProfiles: {},
       company: {
         name: 'บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด',
@@ -714,6 +717,30 @@
       return String(str || '').replace(/e-power/gi, 'e-POWER');
     }
 
+    // ==================== SMART FOLDER GROUPING KEYS (ตัดเว้นวรรคส่วนเกินรวมเข้าโฟลเดอร์เดียวกัน) ====================
+
+    function cleanDisplaySpaces(str) {
+      return String(str || '').replace(/\s+/g, ' ').trim();
+    }
+
+    // คีย์จัดกลุ่มบริษัทไฟแนนซ์: ตัดช่องว่างและเครื่องหมายขีดทั้งหมด เช่น "นิสสันลิสซิ่ง" == "นิสสัน ลิสซิ่ง"
+    function getFinanceFolderKey(finName) {
+      const cleaned = String(finName || '').replace(/[\s\-_]+/g, '').toUpperCase();
+      return cleaned || 'UNSPECIFIED_FINANCE';
+    }
+
+    // คีย์จัดกลุ่มชื่อแคมเปญ: ตัดช่องว่างส่วนเกินและตัวพิมพ์ใหญ่ เช่น "GENRATE" == "Genrate "
+    function getCampaignSubFolderKey(campName) {
+      const cleaned = String(campName || '').replace(/\s+/g, '').toUpperCase();
+      return cleaned || 'STANDARD';
+    }
+
+    // คีย์จัดกลุ่มชื่อรุ่นรถ (Model): ตัดช่องว่างส่วนเกิน เช่น "MG4" == "MG 4", "KICKS" == "KICKS "
+    function getModelFolderKey(modelName) {
+      const cleaned = String(modelName || '').replace(/\s+/g, '').toUpperCase();
+      return cleaned || 'UNSPECIFIED_MODEL';
+    }
+
     // ==================== API FETCH HELPER (BEARER TOKEN + SHOWROOM SCOPE) ====================
 
     async function apiFetch(endpoint, options = {}) {
@@ -765,8 +792,8 @@
 
     function normalizeCar(car) {
       if (!car) return car;
-      car.model = formatEPower(String(car.model || '').trim().toUpperCase());
-      car.grade = formatEPower(String(car.grade || '').trim().toUpperCase());
+      car.model = formatEPower(cleanDisplaySpaces(car.model).toUpperCase());
+      car.grade = formatEPower(cleanDisplaySpaces(car.grade).toUpperCase());
       if (car.insurance === undefined) car.insurance = 18900;
       if (car.regFee === undefined) car.regFee = 3500;
       const baseMg = car.mg !== undefined ? num(car.mg) : 115000;
@@ -807,13 +834,15 @@
 
     function normalizeCampaign(cp) {
       if (!cp) return cp;
+      cp.finance = cleanDisplaySpaces(cp.finance || '');
       if (cp.campaignName === undefined) {
         cp.campaignName = cp.name || 'STANDARD';
       }
+      cp.campaignName = cleanDisplaySpaces(cp.campaignName).toUpperCase();
       if (cp.carModel === undefined) {
         cp.carModel = cp.name || '';
       }
-      cp.carModel = formatEPower(cp.carModel);
+      cp.carModel = formatEPower(cleanDisplaySpaces(cp.carModel).toUpperCase());
       cp.name = cp.carModel ? `${cp.campaignName} - ${cp.carModel}` : cp.campaignName;
       if (cp.isEasyPay === undefined) cp.isEasyPay = false;
       if (cp.balloonPct === undefined) cp.balloonPct = 30;
@@ -879,20 +908,25 @@
     }
 
     function getUniqueFinanceCompanies() {
-      const list = state.campaigns.map(c => c.finance).filter(Boolean);
-      return [...new Set(list)];
+      const seen = new Map();
+      state.campaigns.forEach(c => {
+        if (!c.finance) return;
+        const fKey = getFinanceFolderKey(c.finance);
+        if (!seen.has(fKey)) seen.set(fKey, c.finance);
+      });
+      return [...seen.values()];
     }
 
     function getFilteredCampaignsForPlan(financeText) {
-      const finTrim = String(financeText || '').trim().toUpperCase();
-      const modelTrim = String(state.selectedModel || '').trim().toUpperCase();
+      const targetFinKey = getFinanceFolderKey(financeText);
+      const modelKey = getModelFolderKey(state.selectedModel);
 
       let indexed = state.campaigns.map((cp, index) => ({ cp, index }));
-      const byFinance = indexed.filter(item => item.cp.finance.trim().toUpperCase() === finTrim);
+      const byFinance = indexed.filter(item => getFinanceFolderKey(item.cp.finance) === targetFinKey);
       if (byFinance.length > 0) {
         const byModel = byFinance.filter(item => {
-          const m = (item.cp.carModel || '').trim().toUpperCase();
-          return !modelTrim || !m || m.includes(modelTrim) || modelTrim.includes(m);
+          const mKey = getModelFolderKey(item.cp.carModel);
+          return !state.selectedModel || mKey === 'UNSPECIFIED_MODEL' || mKey.includes(modelKey) || modelKey.includes(mKey);
         });
         return byModel.length > 0 ? byModel : byFinance;
       }
@@ -972,7 +1006,7 @@
         const savedTpl = localStorage.getItem('multi_brand_print_template');
         if (localCars) state.cars = JSON.parse(localCars).map(normalizeCar);
         if (localCamps) state.campaigns = JSON.parse(localCamps).map(normalizeCampaign);
-        if (localAcc) state.accessoriesList = JSON.parse(localAcc).map(a => ({ ...a, model: formatEPower(a.model) }));
+        if (localAcc) state.accessoriesList = JSON.parse(localAcc).map(a => ({ ...a, model: formatEPower(cleanDisplaySpaces(a.model).toUpperCase()) }));
         if (localProfiles) state.brandProfiles = JSON.parse(localProfiles);
         if (localQuots) state.savedQuotations = JSON.parse(localQuots);
         if (savedTpl === '2') state.printTemplate = 2;
@@ -1104,7 +1138,7 @@
         if (accRes && accRes.ok) {
           const cloudAcc = await accRes.json();
           if (Array.isArray(cloudAcc) && cloudAcc.length > 0) {
-            state.accessoriesList = cloudAcc.map(a => ({ ...a, model: formatEPower(a.model) }));
+            state.accessoriesList = cloudAcc.map(a => ({ ...a, model: formatEPower(cleanDisplaySpaces(a.model).toUpperCase()) }));
             updated = true;
           }
         }
@@ -1246,7 +1280,6 @@
 
         await syncFromCloud();
 
-        // หากระดับ 1 และถูกล็อก 1 แบรนด์ไว้แล้ว ให้ข้ามเข้าหน้าคำนวณแบรนด์นั้นทันทีเพื่อความรวดเร็ว
         if (data.user.roleTier === 1 && !data.user.canChangeBrand && data.user.allowedBrands?.length === 1) {
           selectBrand(data.user.allowedBrands[0]);
         } else {
@@ -1345,7 +1378,6 @@
         saveAuthSessionToLocal();
         selectBrand(chosen[0]);
       } catch (err) {
-        // Fallback กรณีออฟไลน์ชั่วคราว
         state.auth.user.allowedBrands = [...chosen];
         state.auth.user.canChangeBrand = false;
         saveAuthSessionToLocal();
@@ -1366,7 +1398,6 @@
 
       return `
         <div class="min-h-screen flex flex-col justify-between p-4 sm:p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white">
-          <!-- Top User & Admin Bar -->
           <div class="max-w-6xl w-full mx-auto flex flex-wrap justify-between items-center gap-3 pb-4 border-b border-slate-800">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-lg font-extrabold text-blue-300">
@@ -1405,7 +1436,6 @@
             </div>
           </div>
 
-          <!-- Main Brand Grid -->
           <div class="max-w-5xl w-full mx-auto my-auto py-6">
             <div class="text-center mb-6 sm:mb-8">
               <span class="px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-widest shadow-sm">
@@ -1539,9 +1569,16 @@
 
     function switchMode(newStep) {
       state.step = newStep;
+      // พับปิดทุกโฟลเดอร์เริ่มต้นเมื่อเข้าหน้าตั้งค่า เพื่อความเป็นระเบียบ
+      if (newStep === 'settings') {
+        state.expandedFinanceFolders = {};
+        state.expandedCampaignSubFolders = {};
+        state.expandedCarFolders = {};
+        state.expandedAccFolders = {};
+      }
       if (newStep === 'balloon') {
-        const modelUpper = String(state.selectedModel || '').trim().toUpperCase();
-        const easyIdx = state.campaigns.findIndex(cp => cp.isEasyPay && (!modelUpper || (cp.carModel || '').toUpperCase().includes(modelUpper)));
+        const modelKey = getModelFolderKey(state.selectedModel);
+        const easyIdx = state.campaigns.findIndex(cp => cp.isEasyPay && (!state.selectedModel || getModelFolderKey(cp.carModel).includes(modelKey)));
         if (easyIdx !== -1) {
           const eCp = state.campaigns[easyIdx];
           state.balloonPlan.campaignIdx = easyIdx;
@@ -1647,8 +1684,15 @@
 
     function renderSharedVehicleCard(modeLabel = 'ราคารถยนต์สุทธิ') {
       const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
-      const uniqueModels = [...new Set(brandCars.map(c => formatEPower(c.model)))];
-      const gradesForModel = brandCars.filter(c => formatEPower(c.model) === formatEPower(state.selectedModel));
+      const uniqueModelsMap = new Map();
+      brandCars.forEach(c => {
+        const mKey = getModelFolderKey(c.model);
+        if (!uniqueModelsMap.has(mKey)) uniqueModelsMap.set(mKey, formatEPower(c.model));
+      });
+      const uniqueModels = [...uniqueModelsMap.values()];
+
+      const curModelKey = getModelFolderKey(state.selectedModel);
+      const gradesForModel = brandCars.filter(c => getModelFolderKey(c.model) === curModelKey);
       const currentCar = state.cars.find(c => c.id == state.selectedCarId) || gradesForModel[0] || null;
       const colors = (currentCar && currentCar.colors && currentCar.colors.length > 0) ? currentCar.colors : [{ name: 'สีมาตรฐาน', price: 0 }];
       const selectedColor = colors[state.selectedColorIdx] || colors[0];
@@ -1670,7 +1714,6 @@
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <!-- 1. ชื่อรุ่นรถ (Model) -->
             <div>
               <label class="block text-xs font-medium text-slate-500 mb-1.5">ชื่อรุ่นรถ (Model)</label>
               <div class="relative flex items-center">
@@ -1685,7 +1728,6 @@
               </div>
             </div>
 
-            <!-- 2. เกรด / รุ่นย่อย (Grade) -->
             <div>
               <label class="block text-xs font-medium text-slate-500 mb-1.5">เกรด / รุ่นย่อย (Grade)</label>
               <div class="relative flex items-center">
@@ -1700,13 +1742,11 @@
               </div>
             </div>
 
-            <!-- 3. ราคารถยนต์ตั้งต้น -->
             <div>
               <label class="block text-xs font-medium text-slate-500 mb-1.5">ราคารถยนต์ตั้งต้น (บาท)</label>
               <input type="text" id="carPrice" value="${fmt(displayCarPrice)}" oninput="onPriceInput()" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none transition-all">
             </div>
 
-            <!-- 4. เลือกสีตัวถังรถ -->
             <div>
               <label class="block text-xs font-medium text-slate-500 mb-1.5">เลือกสีตัวถังรถ</label>
               <div class="relative flex items-center">
@@ -2274,15 +2314,15 @@
       `;
     }
 
-    // ==================== 4. หน้าตั้งค่าระบบ (Settings + ระบบ Excel Import/Export + Cloud Sync) ====================
+    // ==================== 4. หน้าตั้งค่าระบบ (Settings + โฟลเดอร์ 2 ชั้นไฟแนนซ์ + โฟลเดอร์รุ่นรถ/อุปกรณ์) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
-      const brandModels = state.cars.filter(c => c.brand === brandId).map(c => formatEPower(c.model).toUpperCase());
+      const brandModelKeys = state.cars.filter(c => c.brand === brandId).map(c => getModelFolderKey(c.model));
       return state.campaigns.map((cp, idx) => ({ cp, idx })).filter(({ cp }) => {
         if (cp.brand && cp.brand === brandId) return true;
-        const m = String(cp.carModel || '').trim().toUpperCase();
-        if (m && brandModels.some(bm => bm === m || m.includes(bm) || bm.includes(m))) return true;
+        const mKey = getModelFolderKey(cp.carModel);
+        if (mKey !== 'UNSPECIFIED_MODEL' && brandModelKeys.some(bm => bm === mKey || mKey.includes(bm) || bm.includes(mKey))) return true;
         return !cp.brand;
       });
     }
@@ -2290,7 +2330,13 @@
     function renderSettings() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR' };
       const carsForBrand = state.cars.filter(c => c.brand === state.selectedBrand);
-      const uniqueModelsForBrand = [...new Set(carsForBrand.map(c => formatEPower(c.model)))];
+      const uniqueModelsMap = new Map();
+      carsForBrand.forEach(c => {
+        const mKey = getModelFolderKey(c.model);
+        if (!uniqueModelsMap.has(mKey)) uniqueModelsMap.set(mKey, formatEPower(c.model));
+      });
+      const uniqueModelsForBrand = [...uniqueModelsMap.values()];
+
       const accForBrand = state.accessoriesList.filter(a => a.brand === state.selectedBrand);
       const brandCampaignsIndexed = getCampaignsForCurrentBrand();
 
@@ -2314,18 +2360,58 @@
       const easyCol1 = editingCamp && editingCamp.easyCommCol1 !== undefined ? editingCamp.easyCommCol1 : 8;
       const easyCol2 = editingCamp && editingCamp.easyCommCol2 !== undefined ? editingCamp.easyCommCol2 : 16;
 
-      const carFoldersMap = {};
-      carsForBrand.forEach(car => {
-        const mKey = formatEPower(car.model || 'ไม่ระบุรุ่น');
-        if (!carFoldersMap[mKey]) carFoldersMap[mKey] = [];
-        carFoldersMap[mKey].push(car);
+      // 1. จัดกลุ่มแคมเปญไฟแนนซ์แบบ 2 ชั้น (ชั้นที่ 1: บริษัทไฟแนนซ์ -> ชั้นที่ 2: ชื่อแคมเปญ)
+      // ใช้ getFinanceFolderKey และ getCampaignSubFolderKey ตัดเว้นวรรคส่วนเกินเพื่อรวมเข้าโฟลเดอร์เดียวกันอัตโนมัติ
+      const financeFoldersMap = {};
+      brandCampaignsIndexed.forEach(({ cp, idx }) => {
+        const finKey = getFinanceFolderKey(cp.finance);
+        if (!financeFoldersMap[finKey]) {
+          financeFoldersMap[finKey] = {
+            finKey,
+            displayName: cleanDisplaySpaces(cp.finance || 'ไม่ระบุไฟแนนซ์'),
+            totalCount: 0,
+            subCampaigns: {}
+          };
+        }
+        financeFoldersMap[finKey].totalCount++;
+
+        const campKey = getCampaignSubFolderKey(cp.campaignName || cp.name);
+        if (!financeFoldersMap[finKey].subCampaigns[campKey]) {
+          financeFoldersMap[finKey].subCampaigns[campKey] = {
+            campKey,
+            displayName: cleanDisplaySpaces(cp.campaignName || cp.name || 'STANDARD').toUpperCase(),
+            items: []
+          };
+        }
+        financeFoldersMap[finKey].subCampaigns[campKey].items.push({ cp, idx });
       });
 
+      // 2. จัดกลุ่มรุ่นรถตามชื่อ Model เป็นโฟลเดอร์ (ตัดเว้นวรรคส่วนเกินรวมเข้าโฟลเดอร์เดียวกันอัตโนมัติ)
+      const carFoldersMap = {};
+      carsForBrand.forEach(car => {
+        const mKey = getModelFolderKey(car.model);
+        if (!carFoldersMap[mKey]) {
+          carFoldersMap[mKey] = {
+            modelKey: mKey,
+            displayModel: formatEPower(cleanDisplaySpaces(car.model || 'ไม่ระบุรุ่น')),
+            items: []
+          };
+        }
+        carFoldersMap[mKey].items.push(car);
+      });
+
+      // 3. จัดกลุ่มอุปกรณ์ตกแต่งตามชื่อ Model เป็นโฟลเดอร์
       const accFoldersMap = {};
       accForBrand.forEach(acc => {
-        const mKey = formatEPower(acc.model || 'ไม่ระบุรุ่น');
-        if (!accFoldersMap[mKey]) accFoldersMap[mKey] = [];
-        accFoldersMap[mKey].push(acc);
+        const mKey = getModelFolderKey(acc.model);
+        if (!accFoldersMap[mKey]) {
+          accFoldersMap[mKey] = {
+            modelKey: mKey,
+            displayModel: formatEPower(cleanDisplaySpaces(acc.model || 'ไม่ระบุรุ่น')),
+            items: []
+          };
+        }
+        accFoldersMap[mKey].items.push(acc);
       });
 
       const activeSr = (state.auth.showrooms || []).find(s => s.id === state.auth.activeShowroomId);
@@ -2356,7 +2442,7 @@
                   </div>
                   <h2 class="text-base sm:text-lg font-extrabold tracking-tight">📊 จัดการข้อมูลด้วย Excel (รุ่นรถ • อุปกรณ์ตกแต่ง • ตารางดอกเบี้ย)</h2>
                   <p class="text-xs text-slate-300 leading-relaxed">
-                    กด <strong>"📤 ส่งออกไฟล์ต้นแบบ"</strong> เพื่อดาวน์โหลดไฟล์ Excel (<code class="text-amber-300">1_Cars</code>, <code class="text-amber-300">2_Accessories</code>, <code class="text-amber-300">3_Campaigns</code>) ไปแก้ไขแล้วกด <strong>"📥 นำเข้า/อัปเดต"</strong> ระบบจะอัปเดตทับในเครื่องพร้อมซิงค์ขึ้น Cloud D1 ของโชว์รูมทันที
+                    กด <strong>"📤 ส่งออกไฟล์ต้นแบบ"</strong> เพื่อดาวน์โหลดไฟล์ Excel (<code class="text-amber-300">1_Cars</code>, <code class="text-amber-300">2_Accessories</code>, <code class="text-amber-300">3_Campaigns</code>) ไปแก้ไขแล้วกด <strong>"📥 นำเข้า/อัปเดต"</strong> ระบบจะจัดกลุ่มโฟลเดอร์และซิงค์ขึ้น Cloud D1 ทันที
                   </p>
                 </div>
 
@@ -2406,7 +2492,7 @@
               </div>
             </div>
 
-            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix + Easy Pay 60 เดือน) -->
+            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (โฟลเดอร์ 2 ชั้น: ไฟแนนซ์ > แคมเปญ > รุ่นรถ) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="campaignFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
@@ -2448,7 +2534,7 @@
                 </div>
               </div>
 
-              <!-- แถวที่ 2: ☑️ EASY PAY (Balloon) + ช่องสีแดง 3 ช่อง (ComPct | ComMaxYears | ชุด % ค่าคอม) -->
+              <!-- แถวที่ 2: ☑️ EASY PAY (Balloon) + ช่องสีแดง 3 ช่อง -->
               <div class="p-4 rounded-2xl bg-purple-50/60 border border-purple-200/80 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
                 <div class="lg:col-span-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label class="flex items-center gap-2.5 cursor-pointer select-none">
@@ -2602,45 +2688,111 @@
                 </button>
               </div>
 
-              <div class="pt-4 border-t border-slate-100">
-                <h4 class="font-bold text-slate-700 text-xs mb-3">📋 รายการแคมเปญไฟแนนซ์ของแบรนด์ ${brandObj.name} (${brandCampaignsIndexed.length} แคมเปญ)</h4>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  ${brandCampaignsIndexed.map(({ cp, idx }) => {
-                    const activeTerms = getAvailableMonthsForCampaign(idx);
-                    const termRangeLabel = cp.isEasyPay ? '60 เดือน (Easy Pay)' : (activeTerms.length > 0 ? `${activeTerms[0]}-${activeTerms[activeTerms.length - 1]} ด.` : '24-96 ด.');
-                    const mgLabel = MG_TYPE_LABELS[cp.mgType || 'normal'] || 'MG ปกติ';
-                    return `
-                      <div class="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs">
-                        <div class="space-y-1">
+              <!-- รายการแคมเปญไฟแนนซ์แบบโฟลเดอร์ 2 ชั้น (ชั้นที่ 1: บริษัทไฟแนนซ์ > ชั้นที่ 2: ชื่อแคมเปญ) -->
+              <div class="pt-5 border-t border-slate-100 space-y-3">
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                  <h4 class="font-bold text-slate-700 text-xs">📋 รายการแคมเปญไฟแนนซ์ของแบรนด์ ${brandObj.name} (${brandCampaignsIndexed.length} แคมเปญ • จัดกลุ่มโฟลเดอร์ 2 ชั้น)</h4>
+                  <span class="text-[11px] text-slate-400">คลิกที่โฟลเดอร์ไฟแนนซ์ → เลือกโฟลเดอร์แคมเปญย่อย → แก้ไข/ลบรายรุ่น</span>
+                </div>
+
+                ${Object.keys(financeFoldersMap).length === 0 ? `
+                  <div class="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">ยังไม่มีข้อมูลแคมเปญไฟแนนซ์สำหรับแบรนด์นี้</div>
+                ` : Object.values(financeFoldersMap).map(finGroup => {
+                  const isFinOpen = !!state.expandedFinanceFolders[finGroup.finKey];
+                  const subList = Object.values(finGroup.subCampaigns);
+                  return `
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                      <!-- ชั้นที่ 1: โฟลเดอร์บริษัทไฟแนนซ์ -->
+                      <div onclick="toggleFinanceFolder('${finGroup.finKey}')" class="flex items-center justify-between p-3.5 sm:p-4 bg-slate-50 hover:bg-blue-50/60 cursor-pointer select-none transition-colors">
+                        <div class="flex items-center gap-3">
+                          <span class="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-base shadow-sm">🏦</span>
                           <div>
-                            <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md font-bold mr-1.5">${cp.finance}</span>
-                            <span class="font-extrabold text-slate-800">${cp.campaignName || cp.name}</span>
-                            ${cp.carModel ? `<span class="ml-1 font-bold text-indigo-600">[รุ่น: ${formatEPower(cp.carModel)}]</span>` : ''}
-                          </div>
-                          <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
-                            <span class="text-emerald-600 font-semibold">${termRangeLabel}</span>
-                            <span class="px-1.5 py-0.5 bg-sky-100 text-sky-800 rounded font-bold">${mgLabel}</span>
-                            <span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold">ComPct ${cp.comPct ?? 8}% (สูงสุด ${cp.comMaxYears ?? 5} ปี)</span>
-                            ${cp.isEasyPay ? `<span class="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold">🎈 EASY PAY (${cp.balloonPct}%)</span>` : ''}
-                          </div>
-                          <div class="text-[10.5px] text-slate-400">
-                            ${cp.isEasyPay
-                              ? `ตาราง Easy Pay: <strong class="text-purple-700">คอม ${cp.easyCommCol1}% / คอม ${cp.easyCommCol2}%</strong>`
-                              : `ตัวเลือก % คอม: <strong class="text-slate-600">${(cp.commOptions || DEFAULT_COMM_OPTIONS).map(v => v + '%').join(', ')}</strong>`}
+                            <div class="font-extrabold text-slate-900 text-sm flex flex-wrap items-center gap-2">
+                              <span>ไฟแนนซ์: ${finGroup.displayName}</span>
+                              <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[11px] font-bold">${subList.length} กลุ่มแคมเปญ</span>
+                              <span class="px-2 py-0.5 bg-slate-200/80 text-slate-700 rounded-full text-[11px] font-bold">${finGroup.totalCount} รายการ</span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 mt-0.5 truncate max-w-xs sm:max-w-xl">
+                              แคมเปญ: ${subList.map(s => `${s.displayName} (${s.items.length})`).join(' • ')}
+                            </div>
                           </div>
                         </div>
-                        <div class="flex space-x-1.5">
-                          <button type="button" onclick="editCampaign(${idx})" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold">แก้ไข</button>
-                          <button type="button" onclick="deleteCampaign(${idx})" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold">ลบ</button>
+                        <div class="flex items-center gap-2">
+                          <button type="button" onclick="event.stopPropagation();quickFillFinanceCampaignForm('${finGroup.finKey}', '')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold shadow-sm">+ เพิ่มแคมเปญ</button>
+                          <span class="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">${isFinOpen ? '▲' : '▼'}</span>
                         </div>
                       </div>
-                    `;
-                  }).join('')}
-                </div>
+
+                      <!-- เนื้อหาในชั้นที่ 1: รายการโฟลเดอร์ย่อยตามชื่อแคมเปญ -->
+                      <div class="${isFinOpen ? 'block' : 'hidden'} p-3 sm:p-4 bg-slate-100/60 border-t border-slate-200 space-y-2.5">
+                        ${subList.map(sub => {
+                          const subFolderStateKey = `${finGroup.finKey}||${sub.campKey}`;
+                          const isSubOpen = !!state.expandedCampaignSubFolders[subFolderStateKey];
+                          return `
+                            <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                              <!-- ชั้นที่ 2: โฟลเดอร์ชื่อแคมเปญ -->
+                              <div onclick="toggleCampaignSubFolder('${finGroup.finKey}', '${sub.campKey}')" class="flex items-center justify-between p-3 bg-white hover:bg-amber-50/50 cursor-pointer select-none transition-colors">
+                                <div class="flex items-center gap-2.5">
+                                  <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-sm">📂</span>
+                                  <div>
+                                    <div class="font-extrabold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                                      <span>แคมเปญ: ${sub.displayName}</span>
+                                      <span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10.5px] font-bold">${sub.items.length} รุ่นรถ</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-400 truncate max-w-xs sm:max-w-lg">
+                                      รุ่น: ${sub.items.map(it => formatEPower(it.cp.carModel || 'ทั่วไป')).join(', ')}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                  <button type="button" onclick="event.stopPropagation();quickFillFinanceCampaignForm('${finGroup.finKey}', '${sub.campKey}')" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10.5px] font-bold">+ เพิ่มรุ่นในแคมเปญนี้</button>
+                                  <span class="w-6 h-6 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">${isSubOpen ? '▲' : '▼'}</span>
+                                </div>
+                              </div>
+
+                              <!-- รายการแคมเปญแยกตามรุ่นรถข้างในชั้นที่ 2 -->
+                              <div class="${isSubOpen ? 'grid' : 'hidden'} grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 bg-slate-50/80 border-t border-slate-200">
+                                ${sub.items.map(({ cp, idx }) => {
+                                  const activeTerms = getAvailableMonthsForCampaign(idx);
+                                  const termRangeLabel = cp.isEasyPay ? '60 เดือน (Easy Pay)' : (activeTerms.length > 0 ? `${activeTerms[0]}-${activeTerms[activeTerms.length - 1]} ด.` : '24-96 ด.');
+                                  const mgLabel = MG_TYPE_LABELS[cp.mgType || 'normal'] || 'MG ปกติ';
+                                  return `
+                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-xs shadow-2xs">
+                                      <div class="space-y-1">
+                                        <div>
+                                          <span class="font-extrabold text-indigo-700 text-xs sm:text-sm">🚗 รุ่น: ${formatEPower(cp.carModel || 'ทุกรุ่น')}</span>
+                                          ${cp.isEasyPay ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">🎈 EASY PAY (${cp.balloonPct}%)</span>` : ''}
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
+                                          <span class="text-emerald-600 font-semibold">${termRangeLabel}</span>
+                                          <span class="px-1.5 py-0.5 bg-sky-100 text-sky-800 rounded font-bold">${mgLabel}</span>
+                                          <span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold">ComPct ${cp.comPct ?? 8}% (${cp.comMaxYears ?? 5} ปี)</span>
+                                        </div>
+                                        <div class="text-[10.5px] text-slate-400">
+                                          ${cp.isEasyPay
+                                            ? `Easy Pay: <strong class="text-purple-700">คอม ${cp.easyCommCol1}% / คอม ${cp.easyCommCol2}%</strong>`
+                                            : `ชุดคอม: <strong class="text-slate-600">${(cp.commOptions || DEFAULT_COMM_OPTIONS).map(v => v + '%').join(', ')}</strong>`}
+                                        </div>
+                                      </div>
+                                      <div class="flex space-x-1.5 shrink-0">
+                                        <button type="button" onclick="editCampaign(${idx})" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">แก้ไข</button>
+                                        <button type="button" onclick="deleteCampaign(${idx})" class="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold">ลบ</button>
+                                      </div>
+                                    </div>
+                                  `;
+                                }).join('')}
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
               </div>
             </div>
 
-            <!-- 3. จัดการรุ่นรถและสีตัวถัง (พร้อมปุ่ม Export / Import ประจำหมวด) -->
+            <!-- 3. จัดการรุ่นรถและสีตัวถัง (จัดกลุ่มโฟลเดอร์ตาม Model อัตโนมัติ + พับปิดเริ่มต้น) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="carFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <h3 class="font-bold text-slate-800 text-base">🚗 จัดการรุ่นรถและสีตัวถัง (${brandObj.name})</h3>
@@ -2729,25 +2881,25 @@
 
                 ${Object.keys(carFoldersMap).length === 0 ? `
                   <div class="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">ยังไม่มีข้อมูลรุ่นรถสำหรับแบรนด์นี้</div>
-                ` : Object.entries(carFoldersMap).map(([modelKey, items]) => {
-                  const isExpanded = !!state.expandedCarFolders[modelKey];
+                ` : Object.values(carFoldersMap).map(group => {
+                  const isExpanded = !!state.expandedCarFolders[group.modelKey];
                   return `
                     <div class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-                      <div onclick="toggleCarFolder('${modelKey}')" class="flex items-center justify-between p-3.5 sm:p-4 bg-slate-50/90 hover:bg-blue-50/50 cursor-pointer select-none transition-colors">
+                      <div onclick="toggleCarFolder('${group.modelKey}')" class="flex items-center justify-between p-3.5 sm:p-4 bg-slate-50/90 hover:bg-blue-50/50 cursor-pointer select-none transition-colors">
                         <div class="flex items-center gap-3">
                           <span class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-base shadow-sm">📁</span>
                           <div>
                             <div class="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                              <span>รุ่น (Model): ${formatEPower(modelKey)}</span>
-                              <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[11px] font-bold">${items.length} รุ่นย่อย</span>
+                              <span>รุ่น (Model): ${group.displayModel}</span>
+                              <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[11px] font-bold">${group.items.length} รุ่นย่อย</span>
                             </div>
                             <div class="text-[11px] text-slate-500 mt-0.5 truncate max-w-xs sm:max-w-lg">
-                              ${items.map(g => `${formatEPower(g.grade)} (${fmt(g.price)}฿)`).join(' • ')}
+                              ${group.items.map(g => `${formatEPower(g.grade)} (${fmt(g.price)}฿)`).join(' • ')}
                             </div>
                           </div>
                         </div>
                         <div class="flex items-center gap-2">
-                          <button type="button" onclick="event.stopPropagation();quickFillCarModelForm('${modelKey}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm">+ เพิ่มเกรด</button>
+                          <button type="button" onclick="event.stopPropagation();quickFillCarModelForm('${group.modelKey}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm">+ เพิ่มเกรด</button>
                           <span class="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">${isExpanded ? '▲' : '▼'}</span>
                         </div>
                       </div>
@@ -2765,7 +2917,7 @@
                             </tr>
                           </thead>
                           <tbody>
-                            ${items.map(car => `
+                            ${group.items.map(car => `
                               <tr class="border-b border-slate-100 hover:bg-slate-50">
                                 <td class="p-3 font-bold text-slate-800">${formatEPower(car.model)}</td>
                                 <td class="p-3 font-bold text-slate-700">${formatEPower(car.grade)}</td>
@@ -2794,7 +2946,7 @@
               </div>
             </div>
 
-            <!-- 4. จัดการอุปกรณ์ตกแต่ง (พร้อมปุ่ม Export / Import ประจำหมวด) -->
+            <!-- 4. จัดการอุปกรณ์ตกแต่ง (จัดกลุ่มโฟลเดอร์ตาม Model อัตโนมัติ + พับปิดเริ่มต้น) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="accessoryFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
@@ -2853,18 +3005,18 @@
 
                 ${Object.keys(accFoldersMap).length === 0 ? `
                   <div class="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">ยังไม่มีข้อมูลอุปกรณ์ตกแต่งสำหรับแบรนด์นี้</div>
-                ` : Object.entries(accFoldersMap).map(([modelKey, items]) => {
-                  const isExpanded = !!state.expandedAccFolders[modelKey];
-                  const totalCost = items.reduce((s, a) => s + num(a.price), 0);
+                ` : Object.values(accFoldersMap).map(group => {
+                  const isExpanded = !!state.expandedAccFolders[group.modelKey];
+                  const totalCost = group.items.reduce((s, a) => s + num(a.price), 0);
                   return `
                     <div class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-                      <div onclick="toggleAccFolder('${modelKey}')" class="flex items-center justify-between p-3.5 sm:p-4 bg-slate-50/90 hover:bg-blue-50/50 cursor-pointer select-none transition-colors">
+                      <div onclick="toggleAccFolder('${group.modelKey}')" class="flex items-center justify-between p-3.5 sm:p-4 bg-slate-50/90 hover:bg-blue-50/50 cursor-pointer select-none transition-colors">
                         <div class="flex items-center gap-3">
                           <span class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-base shadow-sm">📁</span>
                           <div>
                             <div class="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                              <span>รุ่น (Model): ${formatEPower(modelKey)}</span>
-                              <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[11px] font-bold">${items.length} รายการ</span>
+                              <span>รุ่น (Model): ${group.displayModel}</span>
+                              <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[11px] font-bold">${group.items.length} รายการ</span>
                             </div>
                             <div class="text-[11px] text-slate-500 mt-0.5">
                               ต้นทุนรวมทุกรายการ: <strong class="text-slate-700">${fmt(totalCost)} ฿</strong>
@@ -2872,7 +3024,7 @@
                           </div>
                         </div>
                         <div class="flex items-center gap-2">
-                          <button type="button" onclick="event.stopPropagation();quickFillAccModelForm('${modelKey}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm">+ เพิ่มอุปกรณ์</button>
+                          <button type="button" onclick="event.stopPropagation();quickFillAccModelForm('${group.modelKey}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm">+ เพิ่มอุปกรณ์</button>
                           <span class="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">${isExpanded ? '▲' : '▼'}</span>
                         </div>
                       </div>
@@ -2888,7 +3040,7 @@
                             </tr>
                           </thead>
                           <tbody>
-                            ${items.map(acc => `
+                            ${group.items.map(acc => `
                               <tr class="border-b border-slate-100 hover:bg-slate-50">
                                 <td class="p-3 font-bold text-slate-800">${formatEPower(acc.model)}</td>
                                 <td class="p-3 font-semibold text-slate-700">${acc.name}</td>
@@ -2916,9 +3068,9 @@
 // ==================== CORE LOGIC, MG TYPE RESOLUTION & FORMULAS ====================
 
     function getAccessoriesForCurrentModel() {
-      const modelUpper = String(state.selectedModel || '').trim().toUpperCase();
+      const targetModelKey = getModelFolderKey(state.selectedModel);
       const brandAcc = state.accessoriesList.filter(a => a.brand === state.selectedBrand);
-      const matched = brandAcc.filter(a => String(a.model || '').trim().toUpperCase() === modelUpper);
+      const matched = brandAcc.filter(a => getModelFolderKey(a.model) === targetModelKey);
       return matched.length > 0 ? matched : brandAcc;
     }
 
@@ -2968,10 +3120,10 @@
     }
 
     function matchCampaignsForCurrentModel() {
-      const modelUpper = String(state.selectedModel || '').trim().toUpperCase();
-      if (!modelUpper || state.campaigns.length === 0) return;
+      const targetModelKey = getModelFolderKey(state.selectedModel);
+      if (!state.selectedModel || targetModelKey === 'UNSPECIFIED_MODEL' || state.campaigns.length === 0) return;
 
-      const matchedStdIdx = state.campaigns.findIndex(cp => !cp.isEasyPay && (cp.carModel || cp.name || '').toUpperCase().includes(modelUpper));
+      const matchedStdIdx = state.campaigns.findIndex(cp => !cp.isEasyPay && getModelFolderKey(cp.carModel || cp.name).includes(targetModelKey));
       if (matchedStdIdx !== -1) {
         const cp = state.campaigns[matchedStdIdx];
         state.plans.forEach(p => {
@@ -2985,7 +3137,7 @@
         });
       }
 
-      const matchedEasyIdx = state.campaigns.findIndex(cp => cp.isEasyPay && (cp.carModel || cp.name || '').toUpperCase().includes(modelUpper));
+      const matchedEasyIdx = state.campaigns.findIndex(cp => cp.isEasyPay && getModelFolderKey(cp.carModel || cp.name).includes(targetModelKey));
       const targetBalloonIdx = matchedEasyIdx !== -1 ? matchedEasyIdx : matchedStdIdx;
       if (targetBalloonIdx !== -1) {
         const bCp = state.campaigns[targetBalloonIdx];
@@ -3006,11 +3158,18 @@
     function initBrandSelectionDefaults() {
       loadBrandProfile(state.selectedBrand);
       const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
-      const uniqueModels = [...new Set(brandCars.map(c => formatEPower(c.model)))];
-      if (!state.selectedModel || !uniqueModels.includes(formatEPower(state.selectedModel))) {
+      const uniqueModelsMap = new Map();
+      brandCars.forEach(c => {
+        const mKey = getModelFolderKey(c.model);
+        if (!uniqueModelsMap.has(mKey)) uniqueModelsMap.set(mKey, formatEPower(c.model));
+      });
+      const uniqueModels = [...uniqueModelsMap.values()];
+
+      if (!state.selectedModel || !uniqueModelsMap.has(getModelFolderKey(state.selectedModel))) {
         state.selectedModel = uniqueModels[0] || '';
       }
-      const grades = brandCars.filter(c => formatEPower(c.model) === formatEPower(state.selectedModel));
+      const curModelKey = getModelFolderKey(state.selectedModel);
+      const grades = brandCars.filter(c => getModelFolderKey(c.model) === curModelKey);
       if (!state.selectedCarId || !grades.some(g => g.id == state.selectedCarId)) {
         state.selectedCarId = grades[0] ? grades[0].id : null;
       }
@@ -3056,7 +3215,8 @@
 
     function onModelChange(modelName) {
       state.selectedModel = formatEPower(modelName);
-      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand && formatEPower(c.model) === state.selectedModel);
+      const targetModelKey = getModelFolderKey(state.selectedModel);
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand && getModelFolderKey(c.model) === targetModelKey);
       state.selectedCarId = brandCars[0] ? brandCars[0].id : null;
       const car = brandCars[0];
       state.customCarPrice = car ? car.price : 0;
@@ -4036,7 +4196,7 @@
       }
 
       const newId = `acc_${Date.now()}`;
-      const targetModel = formatEPower(String(state.selectedModel || 'ALL').trim().toUpperCase());
+      const targetModel = formatEPower(cleanDisplaySpaces(state.selectedModel || 'ALL').toUpperCase());
       const newAccObj = {
         id: newId,
         brand: state.selectedBrand,
@@ -5520,7 +5680,6 @@
       const showrooms = state.auth.showrooms || [];
 
       bodyEl.innerHTML = `
-        <!-- 1. เพิ่มโชว์รูมใหม่ -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
           <h4 class="font-bold text-slate-900 text-sm">🏢 เพิ่มโชว์รูม / สาขาใหม่ (Multi-Showroom)</h4>
           <form onsubmit="adminCreateShowroom(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
@@ -5531,7 +5690,6 @@
           </form>
         </div>
 
-        <!-- 2. สร้างบัญชีผู้ใช้งานใหม่ -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
           <h4 class="font-bold text-slate-900 text-sm">➕ สร้างบัญชีผู้ใช้งานใหม่ (กำหนดระดับ 1 / 2 / 3)</h4>
           <form onsubmit="adminCreateUser(event)" class="grid grid-cols-1 sm:grid-cols-6 gap-2.5 text-xs">
@@ -5551,7 +5709,6 @@
           </form>
         </div>
 
-        <!-- 3. รายชื่อผู้ใช้งานทั้งหมดและปุ่มปรับสิทธิ์แบบ Real-time -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
           <h4 class="font-bold text-slate-900 text-sm">👥 รายชื่อผู้ใช้งานทั้งหมด (${adminUsersCache.length} บัญชี)</h4>
           <div class="overflow-x-auto">
@@ -5873,8 +6030,8 @@
       const touchedItems = [];
 
       rows.forEach(row => {
-        const rawModel = String(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], '')).trim();
-        const rawGrade = String(getRowVal(row, ['เกรด', 'Grade'], '')).trim();
+        const rawModel = cleanDisplaySpaces(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], ''));
+        const rawGrade = cleanDisplaySpaces(getRowVal(row, ['เกรด', 'Grade'], ''));
         if (!rawModel || !rawGrade || rawModel === 'MODEL_EXAMPLE') return;
 
         const model = formatEPower(rawModel.toUpperCase());
@@ -5888,13 +6045,15 @@
         const colorsStr = getRowVal(row, ['สีและค่าสี', 'Colors'], 'สีมาตรฐาน:0');
         const colors = parseColorsFromExcelString(colorsStr);
 
+        const targetModelKey = getModelFolderKey(model);
         const existing = state.cars.find(c =>
           c.brand === brandId &&
-          formatEPower(c.model).toUpperCase() === model.toUpperCase() &&
-          formatEPower(c.grade).toUpperCase() === grade.toUpperCase()
+          getModelFolderKey(c.model) === targetModelKey &&
+          cleanDisplaySpaces(c.grade).toUpperCase() === grade.toUpperCase()
         );
 
         if (existing) {
+          existing.model = model;
           existing.price = price;
           existing.mgNormal = mgNormal;
           existing.mgSpecial = mgSpecial;
@@ -5924,7 +6083,6 @@
           touchedItems.push(newCar);
           addedCount++;
         }
-        state.expandedCarFolders[model] = true;
       });
 
       return { updatedCount, addedCount, touchedItems };
@@ -5936,8 +6094,8 @@
       const touchedItems = [];
 
       rows.forEach(row => {
-        const rawModel = String(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], '')).trim();
-        const rawName = String(getRowVal(row, ['ชื่ออุปกรณ์', 'Accessory_Name'], '')).trim();
+        const rawModel = cleanDisplaySpaces(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], ''));
+        const rawName = cleanDisplaySpaces(getRowVal(row, ['ชื่ออุปกรณ์', 'Accessory_Name'], ''));
         if (!rawModel || !rawName || rawModel === 'MODEL_EXAMPLE') return;
 
         const model = formatEPower(rawModel.toUpperCase());
@@ -5945,13 +6103,15 @@
         const chkRaw = String(getRowVal(row, ['ติ๊กเลือกเริ่มต้น', 'Default_Checked'], 'YES')).trim().toUpperCase();
         const defaultChecked = !(chkRaw === 'NO' || chkRaw === 'FALSE' || chkRaw === '0');
 
+        const targetModelKey = getModelFolderKey(model);
         const existing = state.accessoriesList.find(a =>
           a.brand === brandId &&
-          formatEPower(a.model).toUpperCase() === model.toUpperCase() &&
-          a.name.trim().toUpperCase() === rawName.toUpperCase()
+          getModelFolderKey(a.model) === targetModelKey &&
+          cleanDisplaySpaces(a.name).toUpperCase() === rawName.toUpperCase()
         );
 
         if (existing) {
+          existing.model = model;
           existing.price = price;
           existing.defaultChecked = defaultChecked;
           state.margin.selectedAccMap[existing.id] = defaultChecked;
@@ -5972,7 +6132,6 @@
           touchedItems.push(newAcc);
           addedCount++;
         }
-        state.expandedAccFolders[model] = true;
       });
 
       return { updatedCount, addedCount, touchedItems };
@@ -5985,14 +6144,14 @@
       const groupedMap = {};
 
       rows.forEach(row => {
-        const finance = String(getRowVal(row, ['บริษัทไฟแนนซ์', 'Finance'], '')).trim();
-        const campaignName = String(getRowVal(row, ['ชื่อแคมเปญ', 'Campaign_Name'], '')).trim().toUpperCase();
-        const carModel = formatEPower(String(getRowVal(row, ['ชื่อรุ่นรถ', 'Car_Model'], '')).trim().toUpperCase());
+        const finance = cleanDisplaySpaces(getRowVal(row, ['บริษัทไฟแนนซ์', 'Finance'], ''));
+        const campaignName = cleanDisplaySpaces(getRowVal(row, ['ชื่อแคมเปญ', 'Campaign_Name'], '')).toUpperCase();
+        const carModel = formatEPower(cleanDisplaySpaces(getRowVal(row, ['ชื่อรุ่นรถ', 'Car_Model'], '')).toUpperCase());
         if (!finance || (!campaignName && !carModel) || carModel === 'MODEL_EXAMPLE') return;
 
         const easyRaw = String(getRowVal(row, ['เป็น EasyPay', 'Is_EasyPay'], 'NO')).trim().toUpperCase();
         const isEasyPay = (easyRaw === 'YES' || easyRaw === 'TRUE' || easyRaw === '1');
-        const key = `${finance.toUpperCase()}||${campaignName}||${carModel.toUpperCase()}||${isEasyPay ? 'EASY' : 'STD'}`;
+        const key = `${getFinanceFolderKey(finance)}||${getCampaignSubFolderKey(campaignName)}||${getModelFolderKey(carModel)}||${isEasyPay ? 'EASY' : 'STD'}`;
 
         if (!groupedMap[key]) {
           const mgTypeRaw = String(getRowVal(row, ['รูปแบบ MG', 'MG_Type'], 'normal')).trim().toLowerCase();
@@ -6053,9 +6212,9 @@
       Object.values(groupedMap).forEach(rawCp => {
         const normalized = normalizeCampaign(rawCp);
         const existingIdx = state.campaigns.findIndex(c =>
-          c.finance.trim().toUpperCase() === normalized.finance.trim().toUpperCase() &&
-          (c.campaignName || '').trim().toUpperCase() === normalized.campaignName.trim().toUpperCase() &&
-          formatEPower(c.carModel || '').toUpperCase() === formatEPower(normalized.carModel || '').toUpperCase() &&
+          getFinanceFolderKey(c.finance) === getFinanceFolderKey(normalized.finance) &&
+          getCampaignSubFolderKey(c.campaignName) === getCampaignSubFolderKey(normalized.campaignName) &&
+          getModelFolderKey(c.carModel) === getModelFolderKey(normalized.carModel) &&
           Boolean(c.isEasyPay) === Boolean(normalized.isEasyPay)
         );
 
@@ -6134,7 +6293,6 @@
           saveToStorage(false);
           render();
 
-          // ซิงค์ข้อมูลที่อัปโหลดจาก Excel ขึ้น Cloud D1 Database ทันที
           if (state.auth.token) {
             const srId = state.auth.activeShowroomId;
             if (bulkCars.length > 0) {
@@ -6148,7 +6306,7 @@
             }
           }
 
-          alert(`✅ นำเข้าและอัปเดตข้อมูลแบรนด์ ${brandObj.name} สำเร็จ (พร้อมซิงค์ขึ้น Cloud D1)!\n\n` + summaryLines.join('\n'));
+          alert(`✅ นำเข้าและจัดกลุ่มโฟลเดอร์แบรนด์ ${brandObj.name} สำเร็จ (พร้อมซิงค์ขึ้น Cloud D1)!\n\n` + summaryLines.join('\n'));
         } catch (err) {
           console.error('Excel Import Error:', err);
           alert('❌ เกิดข้อผิดพลาดในการอ่านไฟล์ Excel/CSV กรุณาตรวจสอบรูปแบบไฟล์');
@@ -6158,7 +6316,43 @@
       reader.readAsArrayBuffer(file);
     }
 
-    // ==================== SETTINGS FUNCTIONS (CARS FOLDERS, ACCESSORIES FOLDERS, EASY PAY MATRIX) ====================
+    // ==================== NESTED FINANCE FOLDERS (2 ชั้น) & SETTINGS FUNCTIONS ====================
+
+    function toggleFinanceFolder(finKey) {
+      state.expandedFinanceFolders[finKey] = !state.expandedFinanceFolders[finKey];
+      render();
+    }
+
+    function toggleCampaignSubFolder(finKey, campKey) {
+      const subStateKey = `${finKey}||${campKey}`;
+      state.expandedCampaignSubFolders[subStateKey] = !state.expandedCampaignSubFolders[subStateKey];
+      render();
+    }
+
+    function quickFillFinanceCampaignForm(finKey, campKey = '') {
+      state.editingCampaignIndex = null;
+      state.expandedFinanceFolders[finKey] = true;
+      if (campKey) {
+        state.expandedCampaignSubFolders[`${finKey}||${campKey}`] = true;
+      }
+
+      const matchedCamp = state.campaigns.find(cp =>
+        getFinanceFolderKey(cp.finance) === finKey &&
+        (!campKey || getCampaignSubFolderKey(cp.campaignName || cp.name) === campKey)
+      );
+
+      render();
+
+      const finInp = document.getElementById('financeCompanyInput');
+      const campInp = document.getElementById('campaignTitleInput');
+      const modelInp = document.getElementById('campaignCarModelInput');
+
+      if (finInp && matchedCamp) finInp.value = matchedCamp.finance;
+      if (campInp) campInp.value = campKey && matchedCamp ? (matchedCamp.campaignName || '') : '';
+      document.getElementById('campaignFormSection')?.scrollIntoView({ behavior: 'smooth' });
+      if (campKey && modelInp) modelInp.focus();
+      else if (campInp) campInp.focus();
+    }
 
     function toggleEasyPaySettingBox(checked) {
       const box = document.getElementById('settingEasyPayBalloonBox');
@@ -6291,9 +6485,9 @@
     }
 
     async function saveCampaign() {
-      const finance = document.getElementById('financeCompanyInput').value.trim();
-      const campaignName = document.getElementById('campaignTitleInput').value.trim().toUpperCase();
-      const carModel = formatEPower(document.getElementById('campaignCarModelInput').value.trim().toUpperCase());
+      const finance = cleanDisplaySpaces(document.getElementById('financeCompanyInput').value);
+      const campaignName = cleanDisplaySpaces(document.getElementById('campaignTitleInput').value).toUpperCase();
+      const carModel = formatEPower(cleanDisplaySpaces(document.getElementById('campaignCarModelInput').value).toUpperCase());
       const mgType = document.getElementById('campaignMgTypeInput')?.value || 'normal';
       const isEasyPay = document.getElementById('chkEasyPayCampaign')?.checked || false;
       const balloonPct = isEasyPay ? (num(document.getElementById('campaignBalloonPctInput')?.value) || 30) : 30;
@@ -6370,8 +6564,27 @@
         state.campaigns[state.editingCampaignIndex] = campaignData;
         state.editingCampaignIndex = null;
       } else {
-        state.campaigns.push(campaignData);
+        // หากบันทึกไฟแนนซ์+แคมเปญ+รุ่นเดียวกันซ้ำ ให้รวมทับอัตโนมัติ
+        const dupIdx = state.campaigns.findIndex(c =>
+          c.brand === state.selectedBrand &&
+          getFinanceFolderKey(c.finance) === getFinanceFolderKey(campaignData.finance) &&
+          getCampaignSubFolderKey(c.campaignName) === getCampaignSubFolderKey(campaignData.campaignName) &&
+          getModelFolderKey(c.carModel) === getModelFolderKey(campaignData.carModel) &&
+          Boolean(c.isEasyPay) === Boolean(campaignData.isEasyPay)
+        );
+        if (dupIdx !== -1) {
+          campaignData.id = state.campaigns[dupIdx].id;
+          state.campaigns[dupIdx] = campaignData;
+        } else {
+          state.campaigns.push(campaignData);
+        }
       }
+
+      // เปิดโฟลเดอร์ที่เพิ่งบันทึกให้เห็นทันที
+      const fKey = getFinanceFolderKey(campaignData.finance);
+      const cKey = getCampaignSubFolderKey(campaignData.campaignName);
+      state.expandedFinanceFolders[fKey] = true;
+      state.expandedCampaignSubFolders[`${fKey}||${cKey}`] = true;
 
       ensureValidTermsForPlans();
       saveToStorage(false);
@@ -6383,7 +6596,7 @@
       }
 
       render();
-      alert('✅ บันทึกข้อมูลแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
+      alert('✅ บันทึกและจัดกลุ่มแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
     }
 
     function editCampaign(index) {
@@ -6419,18 +6632,19 @@
     function quickFillCarModelForm(modelKey) {
       state.editingCarId = null;
       state.expandedCarFolders[modelKey] = true;
+      const matchedCar = state.cars.find(c => c.brand === state.selectedBrand && getModelFolderKey(c.model) === modelKey);
       render();
       const modelInp = document.getElementById('newModelName');
       const gradeInp = document.getElementById('newGradeName');
-      if (modelInp) modelInp.value = formatEPower(modelKey);
+      if (modelInp) modelInp.value = formatEPower(matchedCar ? matchedCar.model : modelKey);
       document.getElementById('carFormSection')?.scrollIntoView({ behavior: 'smooth' });
       if (gradeInp) gradeInp.focus();
     }
 
     async function addNewCarModel(e) {
       e.preventDefault();
-      const model = formatEPower(document.getElementById('newModelName').value.trim().toUpperCase());
-      const grade = formatEPower(document.getElementById('newGradeName').value.trim().toUpperCase());
+      const model = formatEPower(cleanDisplaySpaces(document.getElementById('newModelName').value).toUpperCase());
+      const grade = formatEPower(cleanDisplaySpaces(document.getElementById('newGradeName').value).toUpperCase());
       const price = num(document.getElementById('newPrice').value);
       const insurance = num(document.getElementById('newCarInsurance')?.value ?? 18900);
       const regFee = num(document.getElementById('newCarRegFee')?.value ?? 3500);
@@ -6465,24 +6679,43 @@
         }
         state.editingCarId = null;
       } else {
-        savedCarObj = normalizeCar({
-          id: `car_${Date.now()}`,
-          brand: state.selectedBrand,
-          model,
-          grade,
-          price,
-          insurance,
-          regFee,
-          mgNormal,
-          mgSpecial,
-          mgOther,
-          mg: mgNormal,
-          colors: finalColors
-        });
-        state.cars.push(savedCarObj);
+        const mKey = getModelFolderKey(model);
+        const dupCar = state.cars.find(c =>
+          c.brand === state.selectedBrand &&
+          getModelFolderKey(c.model) === mKey &&
+          cleanDisplaySpaces(c.grade).toUpperCase() === grade.toUpperCase()
+        );
+        if (dupCar) {
+          dupCar.model = model;
+          dupCar.price = price;
+          dupCar.insurance = insurance;
+          dupCar.regFee = regFee;
+          dupCar.mgNormal = mgNormal;
+          dupCar.mgSpecial = mgSpecial;
+          dupCar.mgOther = mgOther;
+          dupCar.mg = mgNormal;
+          dupCar.colors = finalColors;
+          savedCarObj = dupCar;
+        } else {
+          savedCarObj = normalizeCar({
+            id: `car_${Date.now()}`,
+            brand: state.selectedBrand,
+            model,
+            grade,
+            price,
+            insurance,
+            regFee,
+            mgNormal,
+            mgSpecial,
+            mgOther,
+            mg: mgNormal,
+            colors: finalColors
+          });
+          state.cars.push(savedCarObj);
+        }
       }
 
-      state.expandedCarFolders[model] = true;
+      state.expandedCarFolders[getModelFolderKey(model)] = true;
       saveToStorage(false);
       if (state.auth.token && savedCarObj) {
         apiFetch('/api/cars', {
@@ -6492,7 +6725,7 @@
       }
 
       render();
-      alert('✅ บันทึกข้อมูลรุ่นรถเรียบร้อยแล้ว!');
+      alert('✅ บันทึกและจัดกลุ่มรุ่นรถเรียบร้อยแล้ว!');
     }
 
     function editCar(id) {
@@ -6527,18 +6760,19 @@
     function quickFillAccModelForm(modelKey) {
       state.editingAccessoryId = null;
       state.expandedAccFolders[modelKey] = true;
+      const matchedAcc = state.accessoriesList.find(a => a.brand === state.selectedBrand && getModelFolderKey(a.model) === modelKey);
       render();
       const modelInp = document.getElementById('accModelName');
       const itemInp = document.getElementById('accItemName');
-      if (modelInp) modelInp.value = formatEPower(modelKey);
+      if (modelInp) modelInp.value = formatEPower(matchedAcc ? matchedAcc.model : modelKey);
       document.getElementById('accessoryFormSection')?.scrollIntoView({ behavior: 'smooth' });
       if (itemInp) itemInp.focus();
     }
 
     function saveAccessoryItem(e) {
       e.preventDefault();
-      const model = formatEPower(document.getElementById('accModelName').value.trim().toUpperCase());
-      const name = document.getElementById('accItemName').value.trim();
+      const model = formatEPower(cleanDisplaySpaces(document.getElementById('accModelName').value).toUpperCase());
+      const name = cleanDisplaySpaces(document.getElementById('accItemName').value);
       const price = num(document.getElementById('accItemPrice').value);
 
       if (!model || !name) {
@@ -6557,20 +6791,32 @@
         }
         state.editingAccessoryId = null;
       } else {
-        const newId = `acc_${Date.now()}`;
-        savedAccObj = {
-          id: newId,
-          brand: state.selectedBrand,
-          model,
-          name,
-          price,
-          defaultChecked: true
-        };
-        state.accessoriesList.push(savedAccObj);
-        state.margin.selectedAccMap[newId] = true;
+        const mKey = getModelFolderKey(model);
+        const dupAcc = state.accessoriesList.find(a =>
+          a.brand === state.selectedBrand &&
+          getModelFolderKey(a.model) === mKey &&
+          cleanDisplaySpaces(a.name).toUpperCase() === name.toUpperCase()
+        );
+        if (dupAcc) {
+          dupAcc.model = model;
+          dupAcc.price = price;
+          savedAccObj = dupAcc;
+        } else {
+          const newId = `acc_${Date.now()}`;
+          savedAccObj = {
+            id: newId,
+            brand: state.selectedBrand,
+            model,
+            name,
+            price,
+            defaultChecked: true
+          };
+          state.accessoriesList.push(savedAccObj);
+          state.margin.selectedAccMap[newId] = true;
+        }
       }
 
-      state.expandedAccFolders[model] = true;
+      state.expandedAccFolders[getModelFolderKey(model)] = true;
       saveToStorage(false);
       if (state.auth.token && savedAccObj) {
         apiFetch('/api/accessories', {
@@ -6580,7 +6826,7 @@
       }
 
       render();
-      alert('✅ บันทึกข้อมูลอุปกรณ์ตกแต่งเรียบร้อยแล้ว!');
+      alert('✅ บันทึกและจัดกลุ่มอุปกรณ์ตกแต่งเรียบร้อยแล้ว!');
     }
 
     function editAccessoryItem(id) {
