@@ -10,6 +10,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS (xlsx) สำหรับส่งออกและนำเข้าไฟล์ Excel (.xlsx 3 Sheets) และ CSV -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- html-to-image สำหรับบันทึกใบเสนอราคาเป็นไฟล์รูปภาพ PNG / JPG ความละเอียดสูง -->
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -47,11 +49,14 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      #app, #printModal, #marginModal, .no-print {
+      #app, #printModal, #marginModal, #historyModal, #adminModal, .no-print {
         display: none !important;
       }
       #printArea {
         display: block !important;
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
         width: 100% !important;
         max-width: 200mm !important;
         max-height: 286mm !important;
@@ -66,6 +71,18 @@
       }
     }
     .print-only { display: none; }
+    /* โหมดเรนเดอร์ Off-screen สำหรับแปลงใบเสนอราคาเป็นรูปภาพ PNG / JPG */
+    .capture-render-mode {
+      display: block !important;
+      position: fixed !important;
+      left: -9999px !important;
+      top: 0 !important;
+      width: 794px !important;
+      background: #ffffff !important;
+      padding: 20px 24px !important;
+      box-sizing: border-box !important;
+      z-index: -1 !important;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
@@ -335,14 +352,14 @@
     </div>
   </div>
 
-  <!-- Modal ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึก PDF -->
+  <!-- Modal ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึก PDF / บันทึกรูป PNG & JPG / บันทึกประวัติ -->
   <div id="printModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2.5 sm:p-4 no-print transition-opacity">
     <div class="bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-7 shadow-2xl border border-slate-100 space-y-4 max-h-[94vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-3 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
           <span class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">🖨️</span>
           <div>
-            <h3 class="font-bold text-sm sm:text-lg text-slate-900">ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึก PDF</h3>
+            <h3 class="font-bold text-sm sm:text-lg text-slate-900">ตั้งค่าใบเสนอราคาก่อนพิมพ์ / บันทึกรูป / บันทึกประวัติ</h3>
             <p id="modalSubtitleMode" class="text-xs text-blue-600 font-semibold">โหมดใบเสนอราคา</p>
           </div>
         </div>
@@ -371,7 +388,7 @@
         </div>
 
         <div>
-          <label class="block font-medium text-slate-600 mb-1 text-xs">ชื่อลูกค้า / ผู้รับข้อเสนอ (เว้นว่างได้)</label>
+          <label class="block font-medium text-slate-600 mb-1 text-xs">ชื่อลูกค้า / ผู้รับข้อเสนอ (ใช้ค้นหาในประวัติใบเสนอราคาได้)</label>
           <input type="text" id="modalCustomerName" placeholder="เช่น คุณลูกค้าคนสำคัญ" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-2.5 font-semibold text-slate-800 outline-none text-xs sm:text-sm">
         </div>
 
@@ -462,25 +479,78 @@
         </div>
       </div>
 
-      <!-- Footer: ปุ่มเลือกรูปแบบที่ 1 / รูปแบบที่ 2 (ซ้าย) + ปุ่มยกเลิก / พิมพ์ (ขวา) -->
-      <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pt-3 border-t border-slate-100">
-        <!-- ปุ่มเลือกรูปแบบใบเสนอราคา 2 แบบ -->
-        <div class="flex items-center gap-2">
-          <button type="button" id="btnPrintTemplate1" onclick="selectPrintTemplate(1)" class="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1.5">
-            <span>📄</span> รูปแบบที่ 1 (มาตรฐาน)
-          </button>
-          <button type="button" id="btnPrintTemplate2" onclick="selectPrintTemplate(2)" class="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1.5">
-            <span>✨</span> รูปแบบที่ 2 (พรีเมียม)
+      <!-- Footer: แถว 1 เลือกรูปแบบ (1/2) + บันทึกประวัติ | แถว 2 Export PNG / JPG / พิมพ์ PDF -->
+      <div class="pt-3 border-t border-slate-100 space-y-2.5">
+        <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2">
+          <!-- ปุ่มเลือกรูปแบบใบเสนอราคา 2 แบบ -->
+          <div class="flex items-center gap-2">
+            <button type="button" id="btnPrintTemplate1" onclick="selectPrintTemplate(1)" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1.5">
+              <span>📄</span> รูปแบบที่ 1 (มาตรฐาน)
+            </button>
+            <button type="button" id="btnPrintTemplate2" onclick="selectPrintTemplate(2)" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1.5">
+              <span>✨</span> รูปแบบที่ 2 (พรีเมียม)
+            </button>
+          </div>
+
+          <button type="button" onclick="saveCurrentQuotationToHistory(true)" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-extrabold transition-colors flex items-center justify-center gap-1.5">
+            <span>💾</span> บันทึกดีลเข้าประวัติใบเสนอราคา
           </button>
         </div>
 
-        <div class="flex items-center justify-end gap-2.5">
-          <button onclick="closePrintModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs sm:text-sm transition-colors">ยกเลิก</button>
-          <button onclick="executePrint()" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2">
-            <span>🖨️</span> ยืนยันพิมพ์ / บันทึก PDF
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onclick="closePrintModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition-colors">ยกเลิก</button>
+          <button type="button" onclick="exportQuotationAsImage('png')" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-1.5">
+            <span>🖼️</span> บันทึกรูป PNG
+          </button>
+          <button type="button" onclick="exportQuotationAsImage('jpg')" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-1.5">
+            <span>📷</span> บันทึกรูป JPG
+          </button>
+          <button type="button" onclick="executePrint()" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2">
+            <span>🖨️</span> พิมพ์ / บันทึก PDF (A4)
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal ประวัติใบเสนอราคา (Quotation History / Saved Deals) -->
+  <div id="historyModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2.5 sm:p-4 no-print transition-opacity">
+    <div class="bg-white rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg">📂</span>
+          <div>
+            <h3 class="font-bold text-sm sm:text-lg text-slate-900">ประวัติใบเสนอราคาที่บันทึกไว้ (Saved Quotations)</h3>
+            <p class="text-[11px] text-slate-500">เรียกดูย้อนหลังหรือโหลดกลับมาแก้ไขตัวเลขและพิมพ์ซ้ำได้ทันที</p>
+          </div>
+        </div>
+        <button onclick="closeHistoryModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input type="text" id="historySearchInput" oninput="renderHistoryList()" placeholder="🔍 ค้นหาชื่อลูกค้า, รุ่นรถ, หรือเลขที่เอกสาร (QT-...)..." class="flex-1 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-800 outline-none">
+        <button type="button" onclick="refreshQuotationHistoryFromCloud()" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shrink-0">🔄 ซิงค์จาก Cloud</button>
+      </div>
+
+      <div id="historyListContainer" class="space-y-2.5 max-h-[60vh] overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- Modal จัดการผู้ใช้งาน สิทธิ์ 3 ระดับ และโชว์รูม (เฉพาะ Super Admin ระดับ 3) -->
+  <div id="adminModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2.5 sm:p-4 no-print transition-opacity">
+    <div class="bg-slate-50 rounded-3xl max-w-5xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[94vh] overflow-y-auto">
+      <div class="flex justify-between items-center pb-3 border-b border-slate-200">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-sm">👑</span>
+          <div>
+            <h3 class="font-bold text-sm sm:text-lg text-slate-900">ระบบจัดการผู้ใช้งาน สิทธิ์ 3 ระดับ และโชว์รูม (Super Admin Panel)</h3>
+            <p class="text-[11px] text-slate-500">ระดับ 1 = 1 แบรนด์ | ระดับ 2 = 3 แบรนด์ | ระดับ 3 = แอดมินทุกแบรนด์/ทุกโชว์รูม (เปิด/ปิดสิทธิ์เลือกแบรนด์ได้ตลอดเวลา)</p>
+          </div>
+        </div>
+        <button onclick="closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <div id="adminModalBody" class="space-y-5"></div>
     </div>
   </div>
 
@@ -489,6 +559,8 @@
 
   <!-- ==================== [สิ้นสุดโค้ดชุดที่ 1 — นำโค้ดชุดที่ 2 มาวางต่อจากบรรทัดนี้] ==================== -->
 <script>
+    const API_BASE = 'https://car-finance-api.nopharut.workers.dev';
+
     const AVAILABLE_MONTHS = [24, 36, 48, 60, 72, 84, 96];
     const DOWN_TIERS = [30, 25, 20, 15, 10, 5];
     const EASY_PAY_DOWN_TIERS = [25, 20, 15, 10, 5];
@@ -536,7 +608,16 @@
     ];
 
     let state = {
-      step: 'brand', // 'brand' | 'calc' | 'balloon' | 'cash' | 'settings'
+      step: 'login', // 'login' | 'brand' | 'calc' | 'balloon' | 'cash' | 'settings'
+      auth: {
+        token: '',
+        user: null, // { id, email, fullName, phone, lineId, roleTier, showroomId, showroomName, allowedBrands, canChangeBrand }
+        showrooms: [],
+        activeShowroomId: 'sr_mega_tiwanon',
+        brandDraftSelection: []
+      },
+      savedQuotations: [],
+      loadedQuotationId: null,
       selectedBrand: null,
       selectedModel: '',
       selectedCarId: null,
@@ -549,8 +630,8 @@
       driveOffInputText: '',
       printTemplate: 1, // 1 = รูปแบบที่ 1 (มาตรฐาน), 2 = รูปแบบที่ 2 (Executive Luxury A4)
       pendingImportMode: 'all', // 'all' | 'cars' | 'accessories' | 'campaigns'
-      expandedCarFolders: {}, // { [modelName]: true/false }
-      expandedAccFolders: {}, // { [modelName]: true/false }
+      expandedCarFolders: {},
+      expandedAccFolders: {},
       brandProfiles: {},
       company: {
         name: 'บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด',
@@ -629,9 +710,55 @@
       return isNaN(p) ? 0 : p;
     };
 
-    // ปรับรูปแบบคำว่า E-POWER ให้ตัว e เป็นตัวเล็ก (e-POWER) เสมอ
     function formatEPower(str) {
       return String(str || '').replace(/e-power/gi, 'e-POWER');
+    }
+
+    // ==================== API FETCH HELPER (BEARER TOKEN + SHOWROOM SCOPE) ====================
+
+    async function apiFetch(endpoint, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
+      }
+      if (state.auth.token) {
+        headers['Authorization'] = `Bearer ${state.auth.token}`;
+      }
+      const sep = endpoint.includes('?') ? '&' : '?';
+      const showroomQuery = state.auth.activeShowroomId ? `${sep}showroomId=${encodeURIComponent(state.auth.activeShowroomId)}` : '';
+      const fullUrl = `${API_BASE}${endpoint}${endpoint.startsWith('/api/auth/login') ? '' : showroomQuery}`;
+      return fetch(fullUrl, { ...options, headers });
+    }
+
+    function saveAuthSessionToLocal() {
+      if (state.auth.token && state.auth.user) {
+        localStorage.setItem('mb_auth_token', state.auth.token);
+        localStorage.setItem('mb_auth_user', JSON.stringify(state.auth.user));
+        localStorage.setItem('mb_active_showroom', state.auth.activeShowroomId || state.auth.user.showroomId || 'sr_mega_tiwanon');
+      } else {
+        localStorage.removeItem('mb_auth_token');
+        localStorage.removeItem('mb_auth_user');
+        localStorage.removeItem('mb_active_showroom');
+      }
+    }
+
+    function loadAuthSessionFromLocal() {
+      try {
+        const tok = localStorage.getItem('mb_auth_token');
+        const usrRaw = localStorage.getItem('mb_auth_user');
+        const srId = localStorage.getItem('mb_active_showroom');
+        if (tok && usrRaw) {
+          state.auth.token = tok;
+          state.auth.user = JSON.parse(usrRaw);
+          state.auth.activeShowroomId = srId || state.auth.user.showroomId || 'sr_mega_tiwanon';
+          state.auth.brandDraftSelection = Array.isArray(state.auth.user.allowedBrands)
+            ? state.auth.user.allowedBrands.filter(b => b !== 'ALL')
+            : [];
+          state.step = 'brand';
+        }
+      } catch (e) {
+        console.warn('Session parse error:', e);
+      }
     }
 
     // ==================== NORMALIZATION & DATA HELPERS ====================
@@ -695,7 +822,6 @@
       cp.baseCommPct = cp.comPct;
       if (cp.comMaxYears === undefined) cp.comMaxYears = 5;
 
-      // โครงสร้างตาราง Easy Pay (60 เดือน 2 คอลัมน์ค่าคอม เช่น คอม 8% และ คอม 16%)
       if (cp.easyCommCol1 === undefined) cp.easyCommCol1 = cp.comPct || 8;
       if (cp.easyCommCol2 === undefined) cp.easyCommCol2 = 16;
       if (!cp.easyRates) cp.easyRates = createEmptyEasyPayRates();
@@ -773,27 +899,31 @@
       return indexed;
     }
 
-    // ==================== PER-BRAND PROFILE MANAGEMENT ====================
+    // ==================== PER-BRAND PROFILE MANAGEMENT (PER SHOWROOM) ====================
 
     function getDefaultBrandProfile(brandId) {
       const bObj = BRANDS.find(b => b.id === brandId);
       const bName = bObj ? bObj.name : '';
-      const fallbackCompany = localStorage.getItem('fin_company_name') || (brandId === 'mg' ? 'บริษัท เมกา ออโตโมบิล จำกัด' : `บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด (${bName})`);
-      const fallbackAddress = localStorage.getItem('fin_company_address') || '59/3 หมู่ 4 ตำบลบ้านใหม่ อำเภอเมืองปทุมธานี จังหวัดปทุมธานี 12000';
+      const activeSr = (state.auth.showrooms || []).find(s => s.id === state.auth.activeShowroomId);
+      const usr = state.auth.user;
+
+      const fallbackCompany = activeSr?.name || (brandId === 'mg' ? 'บริษัท เมกา ออโตโมบิล จำกัด' : `บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด (${bName})`);
+      const fallbackAddress = activeSr?.address || '59/3 หมู่ 4 ตำบลบ้านใหม่ อำเภอเมืองปทุมธานี จังหวัดปทุมธานี 12000';
       return {
         companyName: fallbackCompany,
         companyAddress: fallbackAddress,
-        salesName: localStorage.getItem('fin_sales_name') || 'นพรุจ สินธพสุวรรณ (ตี๋)',
-        salesPhone: localStorage.getItem('fin_sales_phone') || '095-635-6394',
-        salesLine: localStorage.getItem('fin_sales_line') || 'tee_mg_mega',
-        salesBranch: localStorage.getItem('fin_sales_branch') || 'สาขาติวานนท์',
-        freebies: localStorage.getItem('fin_sales_freebies') || '1. ประกันภัยชั้น 1 + พ.ร.บ.\n2. ฟิล์มกรองแสงเซรามิกรอบคัน\n3. ผ้ายางเข้ารูป / ชุดอุปกรณ์ฉุกเฉิน\n4. บริการช่วยเหลือฉุกเฉิน 24 ชั่วโมง'
+        salesName: usr?.fullName || 'นพรุจ สินธพสุวรรณ (ตี๋)',
+        salesPhone: usr?.phone || activeSr?.phone || '095-635-6394',
+        salesLine: usr?.lineId || activeSr?.line_id || 'tee_mg_mega',
+        salesBranch: activeSr?.branch || 'สาขาติวานนท์',
+        freebies: '1. ประกันภัยชั้น 1 + พ.ร.บ.\n2. ฟิล์มกรองแสงเซรามิกรอบคัน\n3. ผ้ายางเข้ารูป / ชุดอุปกรณ์ฉุกเฉิน\n4. บริการช่วยเหลือฉุกเฉิน 24 ชั่วโมง'
       };
     }
 
     function loadBrandProfile(brandId) {
       if (!brandId) return;
-      const saved = state.brandProfiles[brandId] || getDefaultBrandProfile(brandId);
+      const srKey = `${state.auth.activeShowroomId || 'default'}_${brandId}`;
+      const saved = state.brandProfiles[srKey] || state.brandProfiles[brandId] || getDefaultBrandProfile(brandId);
       state.company.name = saved.companyName;
       state.company.address = saved.companyAddress;
       state.sales.name = saved.salesName;
@@ -805,7 +935,8 @@
 
     function saveCurrentBrandProfile() {
       if (!state.selectedBrand) return;
-      state.brandProfiles[state.selectedBrand] = {
+      const srKey = `${state.auth.activeShowroomId || 'default'}_${state.selectedBrand}`;
+      const profilePayload = {
         companyName: state.company.name,
         companyAddress: state.company.address,
         salesName: state.sales.name,
@@ -814,10 +945,22 @@
         salesBranch: state.sales.branch,
         freebies: state.sales.freebies
       };
+      state.brandProfiles[srKey] = profilePayload;
       localStorage.setItem('multi_brand_profiles', JSON.stringify(state.brandProfiles));
+
+      if (state.auth.token) {
+        apiFetch('/api/profiles', {
+          method: 'POST',
+          body: JSON.stringify({
+            showroomId: state.auth.activeShowroomId,
+            brandId: state.selectedBrand,
+            ...profilePayload
+          })
+        }).catch(() => null);
+      }
     }
 
-    // ==================== STORAGE & CLOUD SYNC ====================
+    // ==================== STORAGE & CLOUD SYNC (D1 MULTI-SHOWROOM) ====================
 
     async function loadDataFromStorage() {
       try {
@@ -825,13 +968,15 @@
         const localCamps = localStorage.getItem('multi_brand_campaigns');
         const localAcc = localStorage.getItem('multi_brand_accessories');
         const localProfiles = localStorage.getItem('multi_brand_profiles');
+        const localQuots = localStorage.getItem('multi_brand_quotations');
         const savedTpl = localStorage.getItem('multi_brand_print_template');
         if (localCars) state.cars = JSON.parse(localCars).map(normalizeCar);
         if (localCamps) state.campaigns = JSON.parse(localCamps).map(normalizeCampaign);
         if (localAcc) state.accessoriesList = JSON.parse(localAcc).map(a => ({ ...a, model: formatEPower(a.model) }));
         if (localProfiles) state.brandProfiles = JSON.parse(localProfiles);
+        if (localQuots) state.savedQuotations = JSON.parse(localQuots);
         if (savedTpl === '2') state.printTemplate = 2;
-      } catch (err) { console.warn("LocalStorage parse error:", err); }
+      } catch (err) { console.warn('LocalStorage parse error:', err); }
 
       if (!state.cars || state.cars.length === 0) {
         state.cars = [
@@ -910,20 +1055,56 @@
           })
         ];
       }
-      saveToStorage();
+      saveToStorage(false);
     }
 
     async function syncFromCloud() {
+      if (!state.auth.token) return;
       try {
-        const [carsRes, campsRes] = await Promise.all([
-          fetch('/api/cars').catch(() => null),
-          fetch('/api/campaigns').catch(() => null)
+        const meRes = await apiFetch('/api/auth/me').catch(() => null);
+        if (meRes && meRes.status === 401) {
+          handleLogout(true);
+          return;
+        }
+        if (meRes && meRes.ok) {
+          const meData = await meRes.json();
+          if (meData.user) {
+            state.auth.user = meData.user;
+            if (!state.auth.activeShowroomId || meData.user.roleTier !== 3) {
+              state.auth.activeShowroomId = meData.user.showroomId;
+            }
+            if (!meData.user.canChangeBrand) {
+              state.auth.brandDraftSelection = Array.isArray(meData.user.allowedBrands)
+                ? meData.user.allowedBrands.filter(b => b !== 'ALL')
+                : [];
+            }
+          }
+          if (Array.isArray(meData.showrooms)) {
+            state.auth.showrooms = meData.showrooms;
+          }
+          saveAuthSessionToLocal();
+        }
+
+        const [carsRes, accRes, campsRes, profRes, quotRes] = await Promise.all([
+          apiFetch('/api/cars').catch(() => null),
+          apiFetch('/api/accessories').catch(() => null),
+          apiFetch('/api/campaigns').catch(() => null),
+          apiFetch('/api/profiles').catch(() => null),
+          apiFetch('/api/quotations').catch(() => null)
         ]);
+
         let updated = false;
         if (carsRes && carsRes.ok) {
           const cloudCars = await carsRes.json();
           if (Array.isArray(cloudCars) && cloudCars.length > 0) {
             state.cars = cloudCars.map(normalizeCar);
+            updated = true;
+          }
+        }
+        if (accRes && accRes.ok) {
+          const cloudAcc = await accRes.json();
+          if (Array.isArray(cloudAcc) && cloudAcc.length > 0) {
+            state.accessoriesList = cloudAcc.map(a => ({ ...a, model: formatEPower(a.model) }));
             updated = true;
           }
         }
@@ -934,19 +1115,363 @@
             updated = true;
           }
         }
-        if (updated) {
-          saveToStorage();
-          if (state.step !== 'brand') render();
+        if (profRes && profRes.ok) {
+          const profData = await profRes.json();
+          if (profData && profData.profiles) {
+            const srPrefix = `${state.auth.activeShowroomId || 'default'}_`;
+            Object.entries(profData.profiles).forEach(([bId, pObj]) => {
+              state.brandProfiles[`${srPrefix}${bId}`] = pObj;
+            });
+            updated = true;
+          }
         }
-      } catch (e) {}
+        if (quotRes && quotRes.ok) {
+          const qData = await quotRes.json();
+          if (qData && Array.isArray(qData.quotations)) {
+            state.savedQuotations = qData.quotations;
+            localStorage.setItem('multi_brand_quotations', JSON.stringify(state.savedQuotations));
+          }
+        }
+
+        if (updated) {
+          saveToStorage(false);
+          if (state.selectedBrand) loadBrandProfile(state.selectedBrand);
+        }
+        if (state.step !== 'login') render();
+      } catch (e) {
+        console.warn('Cloud sync warning:', e);
+      }
     }
 
-    function saveToStorage() {
+    function saveToStorage(syncProfileToCloud = true) {
       localStorage.setItem('multi_brand_cars', JSON.stringify(state.cars));
       localStorage.setItem('multi_brand_campaigns', JSON.stringify(state.campaigns));
       localStorage.setItem('multi_brand_accessories', JSON.stringify(state.accessoriesList));
       localStorage.setItem('multi_brand_print_template', String(state.printTemplate || 1));
-      saveCurrentBrandProfile();
+      if (syncProfileToCloud) {
+        saveCurrentBrandProfile();
+      } else if (state.selectedBrand) {
+        const srKey = `${state.auth.activeShowroomId || 'default'}_${state.selectedBrand}`;
+        state.brandProfiles[srKey] = {
+          companyName: state.company.name,
+          companyAddress: state.company.address,
+          salesName: state.sales.name,
+          salesPhone: state.sales.phone,
+          salesLine: state.sales.line,
+          salesBranch: state.sales.branch,
+          freebies: state.sales.freebies
+        };
+        localStorage.setItem('multi_brand_profiles', JSON.stringify(state.brandProfiles));
+      }
+    }
+
+    // ==================== LOGIN, LOGOUT & 3-TIER BRAND SELECTION ====================
+
+    function renderLoginPage() {
+      return `
+        <div class="min-h-screen flex flex-col justify-center items-center p-4 sm:p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white">
+          <div class="max-w-md w-full bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div class="text-center space-y-2">
+              <span class="inline-block px-3.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-widest">
+                Multi-Showroom FinTech SaaS
+              </span>
+              <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Multi-Brand Car Finance & Quotation Pro</h1>
+              <p class="text-xs text-slate-400">เข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับจากแอดมินโชว์รูม</p>
+            </div>
+
+            <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1.5">อีเมลผู้ใช้งาน (Email)</label>
+                <input type="email" id="loginEmailInput" required placeholder="name@company.co.th" class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm font-semibold text-white outline-none transition-all">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1.5">รหัสผ่าน (Password)</label>
+                <input type="password" id="loginPasswordInput" required placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm font-semibold text-white outline-none transition-all">
+              </div>
+
+              <div id="loginErrorMsg" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-semibold text-center"></div>
+
+              <button type="submit" id="loginSubmitBtn" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/25 transition-all">
+                🔐 เข้าสู่ระบบ (Sign In)
+              </button>
+            </form>
+
+            <div class="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+              <div class="font-bold text-slate-300">สิทธิ์การใช้งาน 3 ระดับ:</div>
+              <div>• <strong>ระดับ 1:</strong> เลือกใช้งานได้ 1 แบรนด์ | <strong>ระดับ 2:</strong> เลือกใช้งานได้ 3 แบรนด์</div>
+              <div>• <strong>ระดับ 3 (Super Admin):</strong> ใช้งานได้ทุกแบรนด์ และจัดการสิทธิ์/โชว์รูมได้ตลอดเวลา</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('loginEmailInput')?.value.trim();
+      const password = document.getElementById('loginPasswordInput')?.value;
+      const errBox = document.getElementById('loginErrorMsg');
+      const btn = document.getElementById('loginSubmitBtn');
+
+      if (!email || !password) return;
+      if (errBox) errBox.classList.add('hidden');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ กำลังตรวจสอบสิทธิ์...';
+      }
+
+      try {
+        const res = await apiFetch('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          if (errBox) {
+            errBox.innerText = data.error || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+            errBox.classList.remove('hidden');
+          }
+          return;
+        }
+
+        state.auth.token = data.token;
+        state.auth.user = data.user;
+        state.auth.activeShowroomId = data.user.showroomId || 'sr_mega_tiwanon';
+        state.auth.brandDraftSelection = Array.isArray(data.user.allowedBrands)
+          ? data.user.allowedBrands.filter(b => b !== 'ALL')
+          : [];
+        saveAuthSessionToLocal();
+
+        await syncFromCloud();
+
+        // หากระดับ 1 และถูกล็อก 1 แบรนด์ไว้แล้ว ให้ข้ามเข้าหน้าคำนวณแบรนด์นั้นทันทีเพื่อความรวดเร็ว
+        if (data.user.roleTier === 1 && !data.user.canChangeBrand && data.user.allowedBrands?.length === 1) {
+          selectBrand(data.user.allowedBrands[0]);
+        } else {
+          state.step = 'brand';
+          render();
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.innerText = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต';
+          errBox.classList.remove('hidden');
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '🔐 เข้าสู่ระบบ (Sign In)';
+        }
+      }
+    }
+
+    function handleLogout(silent = false) {
+      if (!silent && !confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+      state.auth.token = '';
+      state.auth.user = null;
+      state.auth.showrooms = [];
+      state.auth.brandDraftSelection = [];
+      state.selectedBrand = null;
+      state.step = 'login';
+      saveAuthSessionToLocal();
+      render();
+    }
+
+    function getUserRoleBadgeText(tier) {
+      if (Number(tier) === 3) return '👑 ระดับ 3 (Super Admin)';
+      if (Number(tier) === 2) return '⭐ ระดับ 2 (3 แบรนด์)';
+      return '👤 ระดับ 1 (1 แบรนด์)';
+    }
+
+    function switchActiveShowroom(newShowroomId) {
+      if (!state.auth.user || state.auth.user.roleTier !== 3) return;
+      state.auth.activeShowroomId = newShowroomId;
+      saveAuthSessionToLocal();
+      syncFromCloud();
+    }
+
+    function toggleDraftBrandSelection(brandId) {
+      const usr = state.auth.user;
+      if (!usr || usr.roleTier === 3 || !usr.canChangeBrand) return;
+
+      const maxQuota = usr.roleTier === 1 ? 1 : 3;
+      const list = [...state.auth.brandDraftSelection];
+      const idx = list.indexOf(brandId);
+
+      if (idx !== -1) {
+        list.splice(idx, 1);
+      } else {
+        if (maxQuota === 1) {
+          list.splice(0, list.length, brandId);
+        } else if (list.length >= maxQuota) {
+          alert(`สิทธิ์ระดับ ${usr.roleTier} เลือกได้สูงสุด ${maxQuota} แบรนด์ครับ (กดยกเลิกแบรนด์ที่เลือกไว้ก่อนเพื่อเปลี่ยน)`);
+          return;
+        } else {
+          list.push(brandId);
+        }
+      }
+      state.auth.brandDraftSelection = list;
+      render();
+    }
+
+    async function confirmUserBrandSelection() {
+      const usr = state.auth.user;
+      if (!usr || usr.roleTier === 3 || !usr.canChangeBrand) return;
+
+      const chosen = state.auth.brandDraftSelection;
+      const maxQuota = usr.roleTier === 1 ? 1 : 3;
+      if (!chosen || chosen.length === 0 || chosen.length > maxQuota) {
+        alert(`กรุณาเลือกแบรนด์อย่างน้อย 1 แบรนด์ (สูงสุด ${maxQuota} แบรนด์)`);
+        return;
+      }
+
+      const brandNames = chosen.map(id => BRANDS.find(b => b.id === id)?.name || id).join(', ');
+      if (!confirm(`ยืนยันการเลือกแบรนด์: ${brandNames}\n\n* หมายเหตุ: เมื่อยืนยันแล้วระบบจะล็อกแบรนด์ตามสิทธิ์ระดับ ${usr.roleTier} (หากต้องการเปลี่ยนภายหลังต้องแจ้งแอดมินเปิดสิทธิ์ให้ใหม่)`)) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/user/select-brands', {
+          method: 'POST',
+          body: JSON.stringify({ brands: chosen })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'ไม่สามารถบันทึกแบรนด์ที่เลือกได้');
+          return;
+        }
+        state.auth.user = data.user;
+        saveAuthSessionToLocal();
+        selectBrand(chosen[0]);
+      } catch (err) {
+        // Fallback กรณีออฟไลน์ชั่วคราว
+        state.auth.user.allowedBrands = [...chosen];
+        state.auth.user.canChangeBrand = false;
+        saveAuthSessionToLocal();
+        selectBrand(chosen[0]);
+      }
+    }
+
+    function renderBrandSelector() {
+      const usr = state.auth.user;
+      if (!usr) return renderLoginPage();
+
+      const tier = Number(usr.roleTier || 1);
+      const isSuperAdmin = tier === 3;
+      const canChoose = !isSuperAdmin && usr.canChangeBrand;
+      const maxQuota = tier === 1 ? 1 : 3;
+      const lockedBrands = Array.isArray(usr.allowedBrands) ? usr.allowedBrands : [];
+      const draftBrands = state.auth.brandDraftSelection || [];
+
+      return `
+        <div class="min-h-screen flex flex-col justify-between p-4 sm:p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white">
+          <!-- Top User & Admin Bar -->
+          <div class="max-w-6xl w-full mx-auto flex flex-wrap justify-between items-center gap-3 pb-4 border-b border-slate-800">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-lg font-extrabold text-blue-300">
+                ${usr.fullName.charAt(0)}
+              </div>
+              <div>
+                <div class="font-bold text-sm text-white flex flex-wrap items-center gap-2">
+                  <span>${usr.fullName}</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isSuperAdmin ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}">
+                    ${getUserRoleBadgeText(tier)}
+                  </span>
+                </div>
+                <div class="text-xs text-slate-400">
+                  โชว์รูม: <strong class="text-slate-200">${usr.showroomName || state.auth.activeShowroomId}</strong> • ${usr.email}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              ${isSuperAdmin && state.auth.showrooms.length > 0 ? `
+                <select onchange="switchActiveShowroom(this.value)" class="bg-slate-800 border border-slate-700 text-amber-300 rounded-xl px-3 py-2 text-xs font-bold outline-none cursor-pointer" title="สลับโชว์รูม (Super Admin)">
+                  ${state.auth.showrooms.map(sr => `<option value="${sr.id}" ${sr.id === state.auth.activeShowroomId ? 'selected' : ''}>🏢 ${sr.name}</option>`).join('')}
+                </select>
+              ` : ''}
+              <button type="button" onclick="openHistoryModal()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-xl text-xs font-bold transition-all">
+                📂 ประวัติใบเสนอราคา
+              </button>
+              ${isSuperAdmin ? `
+                <button type="button" onclick="openAdminModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all">
+                  👑 จัดการผู้ใช้ / สิทธิ์ / โชว์รูม
+                </button>
+              ` : ''}
+              <button type="button" onclick="handleLogout()" class="px-3.5 py-2 bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800/60 rounded-xl text-xs font-bold transition-all">
+                ออกจากระบบ
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Brand Grid -->
+          <div class="max-w-5xl w-full mx-auto my-auto py-6">
+            <div class="text-center mb-6 sm:mb-8">
+              <span class="px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-widest shadow-sm">
+                Multi-Brand Car Finance & Quotation Pro
+              </span>
+              <h1 class="text-2xl sm:text-3xl font-extrabold mt-3 tracking-tight text-white">
+                ${canChoose ? `กรุณาเลือกแบรนด์ที่ต้องการใช้งาน (เลือกได้ ${maxQuota} แบรนด์)` : 'เลือกแบรนด์รถยนต์ที่ต้องการคำนวณ'}
+              </h1>
+
+              ${canChoose ? `
+                <div class="mt-3 inline-flex flex-wrap items-center justify-center gap-3 bg-amber-500/15 border border-amber-500/40 px-4 py-2.5 rounded-2xl text-xs">
+                  <span class="text-amber-200 font-semibold">
+                    เลือกแล้ว <strong>${draftBrands.length} / ${maxQuota}</strong> แบรนด์
+                    ${draftBrands.length > 0 ? `(${draftBrands.map(id => BRANDS.find(b => b.id === id)?.name || id).join(', ')})` : ''}
+                  </span>
+                  <button type="button" onclick="confirmUserBrandSelection()" ${draftBrands.length === 0 ? 'disabled' : ''} class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 rounded-xl font-extrabold shadow-md transition-all">
+                    ✓ ยืนยันการเลือกแบรนด์
+                  </button>
+                </div>
+              ` : (!isSuperAdmin ? `
+                <p class="text-amber-300/90 text-xs mt-2 font-medium">
+                  🔒 แบรนด์ถูกล็อกตามสิทธิ์ระดับ ${tier} (${lockedBrands.map(id => BRANDS.find(b => b.id === id)?.name || id).join(', ')}) — หากต้องการเปลี่ยนแบรนด์กรุณาแจ้งแอดมินเปิดสิทธิ์ให้ใหม่
+                </p>
+              ` : `
+                <p class="text-slate-400 text-xs mt-2">สิทธิ์ Super Admin (ระดับ 3): เลือกใช้งานและตั้งค่าได้ทุกแบรนด์และทุกโชว์รูม</p>
+              `)}
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
+              ${BRANDS.map(b => {
+                const count = state.cars.filter(c => c.brand === b.id).length;
+                const isAllowed = isSuperAdmin || lockedBrands.includes('ALL') || lockedBrands.includes(b.id);
+                const isDraftPicked = canChoose && draftBrands.includes(b.id);
+
+                if (canChoose) {
+                  return `
+                    <button type="button" onclick="toggleDraftBrandSelection('${b.id}')" class="group relative flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 ${isDraftPicked ? 'bg-blue-900/50 border-emerald-400 shadow-lg shadow-emerald-500/15 -translate-y-0.5' : 'bg-slate-800/50 border-slate-700/70 hover:border-blue-400'}">
+                      ${isDraftPicked ? `<span class="absolute top-2.5 left-2.5 px-2 py-0.5 text-[10px] font-extrabold bg-emerald-500 text-slate-950 rounded-full">✓ เลือกแล้ว</span>` : ''}
+                      ${count > 0 ? `<span class="absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">${count} รุ่น</span>` : ''}
+                      <div class="w-12 h-12 sm:w-14 sm:h-14 mb-3 flex items-center justify-center bg-white/95 rounded-2xl p-2.5 shadow-inner">
+                        <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.src='https://placehold.co/80x80/1e293b/ffffff?text=${b.name.charAt(0)}'">
+                      </div>
+                      <span class="font-bold text-xs text-white tracking-wider">${b.name}</span>
+                    </button>
+                  `;
+                }
+
+                return `
+                  <button type="button" ${isAllowed ? `onclick="selectBrand('${b.id}')"` : 'disabled'} class="group relative flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${isAllowed ? 'bg-slate-800/50 backdrop-blur-md border-slate-700/70 hover:border-blue-500 hover:bg-slate-800/90 shadow-lg hover:shadow-blue-500/10 hover:-translate-y-0.5 cursor-pointer' : 'bg-slate-900/40 border-slate-800/50 opacity-35 cursor-not-allowed'}">
+                    ${!isAllowed ? `<span class="absolute top-2.5 left-2.5 text-xs" title="ล็อกตามสิทธิ์ระดับ ${tier}">🔒</span>` : ''}
+                    ${count > 0 ? `<span class="absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">${count} รุ่น</span>` : ''}
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 mb-3 flex items-center justify-center bg-white/95 rounded-2xl p-2.5 shadow-inner ${isAllowed ? 'group-hover:scale-105 transition-transform' : ''}">
+                      <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.src='https://placehold.co/80x80/1e293b/ffffff?text=${b.name.charAt(0)}'">
+                    </div>
+                    <span class="font-bold text-xs text-slate-200 ${isAllowed ? 'group-hover:text-white' : ''} tracking-wider">${b.name}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <div class="text-center text-[11px] text-slate-500 pt-2">
+            Multi-Brand Car Finance & Quotation Pro • Cloud Sync Powered by Cloudflare D1
+          </div>
+        </div>
+      `;
     }
 
     // ==================== DYNAMIC AVAILABLE TERMS & COMM YEARS PER CAMPAIGN ====================
@@ -1042,7 +1567,9 @@
     function render() {
       const app = document.getElementById('app');
       if (!app) return;
-      if (state.step === 'brand') {
+      if (!state.auth.user || state.step === 'login') {
+        app.innerHTML = renderLoginPage();
+      } else if (state.step === 'brand') {
         app.innerHTML = renderBrandSelector();
       } else if (state.step === 'calc') {
         app.innerHTML = renderCalculator();
@@ -1062,6 +1589,8 @@
 
     function renderTopHeader() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR', img: '' };
+      const usr = state.auth.user || { fullName: '', roleTier: 1 };
+      const isSuperAdmin = Number(usr.roleTier) === 3;
       const navItems = [
         { id: 'calc', label: '📋 ผ่อนมาตรฐาน (4 แผน)' },
         { id: 'balloon', label: '🎈 บอลลูน (Balloon)' },
@@ -1070,7 +1599,7 @@
 
       return `
         <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-lg border-b border-slate-800">
-          <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-2.5">
+          <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap justify-between items-center gap-2">
             <div class="flex items-center space-x-3">
               <div class="w-10 h-10 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-sm">
                 <img src="${brandObj.img}" alt="${brandObj.name}" class="max-h-full max-w-full object-contain">
@@ -1078,7 +1607,9 @@
               <div>
                 <h1 class="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
                   <span>${brandObj.name}</span>
-                  <span class="text-[11px] font-semibold px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-500/30 hidden sm:inline-block">QUOTATION PRO</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-500/30 hidden sm:inline-block">
+                    ${getUserRoleBadgeText(usr.roleTier)}
+                  </span>
                 </h1>
                 <p class="text-[11px] text-slate-400 truncate max-w-[180px] sm:max-w-xs">${state.company.name}</p>
               </div>
@@ -1087,17 +1618,25 @@
             <!-- Mode Switcher Tabs -->
             <div class="flex items-center bg-slate-950/90 p-1 rounded-2xl border border-slate-800 order-3 lg:order-2 w-full lg:w-auto justify-center">
               ${navItems.map(item => `
-                <button onclick="switchMode('${item.id}')" class="flex-1 lg:flex-initial px-3 sm:px-3.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${state.step === item.id ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'text-slate-400 hover:text-white'}">
+                <button onclick="switchMode('${item.id}')" class="flex-1 lg:flex-initial px-3 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${state.step === item.id ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'text-slate-400 hover:text-white'}">
                   ${item.label}
                 </button>
               `).join('')}
             </div>
 
-            <div class="flex items-center space-x-2 order-2 lg:order-3">
-              <button onclick="switchMode('settings')" class="px-3 sm:px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5">
-                <span>⚙️</span> <span class="hidden sm:inline">ตั้งค่ารุ่นรถ/ดอกเบี้ย</span><span class="sm:hidden">ตั้งค่า</span>
+            <div class="flex items-center flex-wrap gap-1.5 order-2 lg:order-3">
+              <button type="button" onclick="openHistoryModal()" class="px-2.5 sm:px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-xl text-xs font-bold transition-all" title="ประวัติใบเสนอราคาที่บันทึกไว้">
+                📂 <span class="hidden md:inline">ประวัติ</span>
               </button>
-              <button onclick="switchMode('brand')" class="px-3 sm:px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all">
+              ${isSuperAdmin ? `
+                <button type="button" onclick="openAdminModal()" class="px-2.5 sm:px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all" title="จัดการผู้ใช้/สิทธิ์/โชว์รูม">
+                  👑 <span class="hidden md:inline">Admin</span>
+                </button>
+              ` : ''}
+              <button onclick="switchMode('settings')" class="px-2.5 sm:px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1">
+                <span>⚙️</span> <span class="hidden sm:inline">ตั้งค่า</span>
+              </button>
+              <button onclick="switchMode('brand')" class="px-2.5 sm:px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all">
                 เปลี่ยนแบรนด์
               </button>
             </div>
@@ -1202,34 +1741,6 @@
               </div>
               <span id="resNetPriceFull" class="text-xl sm:text-2xl font-extrabold tracking-tight">0 ฿</span>
             </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function renderBrandSelector() {
-      return `
-        <div class="min-h-screen flex flex-col justify-center items-center p-4 sm:p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white">
-          <div class="max-w-5xl w-full text-center mb-8 sm:mb-10">
-            <span class="px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-widest shadow-sm">
-              Multi-Brand Car Finance & Quotation Pro
-            </span>
-            <h1 class="text-2xl sm:text-4xl font-extrabold mt-4 tracking-tight text-white">เลือกแบรนด์รถยนต์ที่ต้องการคำนวณ</h1>
-            <p class="text-slate-400 text-xs sm:text-sm mt-2">รองรับโหมดผ่อนมาตรฐาน 4 แผน, โหมดบอลลูน (Easy Pay), โหมดซื้อสด, ระบบคำนวณกำไรฝั่งเซลล์ และใบเสนอราคา 2 รูปแบบ</p>
-          </div>
-          <div class="max-w-5xl w-full grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
-            ${BRANDS.map(b => {
-              const count = state.cars.filter(c => c.brand === b.id).length;
-              return `
-                <button onclick="selectBrand('${b.id}')" class="group relative flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl bg-slate-800/50 backdrop-blur-md border border-slate-700/70 hover:border-blue-500 hover:bg-slate-800/90 transition-all duration-200 shadow-lg hover:shadow-blue-500/10 hover:-translate-y-0.5">
-                  ${count > 0 ? `<span class="absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">${count} รุ่น</span>` : ''}
-                  <div class="w-12 h-12 sm:w-14 sm:h-14 mb-3 flex items-center justify-center bg-white/95 rounded-2xl p-2.5 shadow-inner group-hover:scale-105 transition-transform">
-                    <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.src='https://placehold.co/80x80/1e293b/ffffff?text=${b.name.charAt(0)}'">
-                  </div>
-                  <span class="font-bold text-xs text-slate-200 group-hover:text-white tracking-wider">${b.name}</span>
-                </button>
-              `;
-            }).join('')}
           </div>
         </div>
       `;
@@ -1503,7 +2014,7 @@
 
                 <div class="mt-6 pt-4 border-t border-slate-800 space-y-2.5">
                   <button type="button" onclick="openPrintModal()" class="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 transition-all">
-                    <span>🖨️</span> ตั้งค่าและพิมพ์ใบเสนอราคา (A4)
+                    <span>🖨️</span> ตั้งค่าและพิมพ์ / บันทึกรูปใบเสนอราคา
                   </button>
                   <button type="button" onclick="openMarginModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-2xl font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all">
                     <span>💰</span> คำนวณรายรับ / รายจ่าย / กำไร (ฝั่งเซลล์)
@@ -1682,7 +2193,7 @@
 
                 <div class="mt-6 pt-4 border-t border-slate-800 space-y-2.5">
                   <button type="button" onclick="openPrintModal()" class="w-full py-3.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-sm shadow-xl flex items-center justify-center gap-2 transition-all">
-                    <span>🖨️</span> ตั้งค่าและพิมพ์ใบเสนอราคา Balloon (A4)
+                    <span>🖨️</span> ตั้งค่าและพิมพ์ / บันทึกรูป Balloon
                   </button>
                   <button type="button" onclick="openMarginModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-2xl font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all">
                     <span>💰</span> คำนวณรายรับ / รายจ่าย / กำไร (ฝั่งเซลล์)
@@ -1750,7 +2261,7 @@
 
                 <div class="mt-6 pt-4 border-t border-slate-800 space-y-2.5">
                   <button type="button" onclick="openPrintModal()" class="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl font-bold text-sm shadow-xl flex items-center justify-center gap-2 transition-all">
-                    <span>🖨️</span> ตั้งค่าและพิมพ์ใบเสนอราคาซื้อสด (A4)
+                    <span>🖨️</span> ตั้งค่าและพิมพ์ / บันทึกรูปซื้อสด
                   </button>
                   <button type="button" onclick="openMarginModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-2xl font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all">
                     <span>💰</span> คำนวณรายรับ / รายจ่าย / กำไร (ฝั่งเซลล์)
@@ -1763,7 +2274,7 @@
       `;
     }
 
-    // ==================== 4. หน้าตั้งค่าระบบ (Settings + ระบบ Excel Import/Export ครบวงจร) ====================
+    // ==================== 4. หน้าตั้งค่าระบบ (Settings + ระบบ Excel Import/Export + Cloud Sync) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
@@ -1803,7 +2314,6 @@
       const easyCol1 = editingCamp && editingCamp.easyCommCol1 !== undefined ? editingCamp.easyCommCol1 : 8;
       const easyCol2 = editingCamp && editingCamp.easyCommCol2 !== undefined ? editingCamp.easyCommCol2 : 16;
 
-      // จัดกลุ่มรุ่นรถตามชื่อ Model เป็นโฟลเดอร์
       const carFoldersMap = {};
       carsForBrand.forEach(car => {
         const mKey = formatEPower(car.model || 'ไม่ระบุรุ่น');
@@ -1811,7 +2321,6 @@
         carFoldersMap[mKey].push(car);
       });
 
-      // จัดกลุ่มอุปกรณ์ตกแต่งตามชื่อ Model เป็นโฟลเดอร์
       const accFoldersMap = {};
       accForBrand.forEach(acc => {
         const mKey = formatEPower(acc.model || 'ไม่ระบุรุ่น');
@@ -1819,12 +2328,17 @@
         accFoldersMap[mKey].push(acc);
       });
 
+      const activeSr = (state.auth.showrooms || []).find(s => s.id === state.auth.activeShowroomId);
+
       return `
         <div class="min-h-screen bg-slate-100 flex flex-col">
-          <header class="bg-slate-900 text-white px-4 sm:px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-md">
-            <h1 class="font-bold text-sm sm:text-base flex items-center gap-2">
-              <span>⚙️</span> ตั้งค่าระบบและฐานข้อมูลแบรนด์: <span class="text-blue-400">${brandObj.name}</span>
-            </h1>
+          <header class="bg-slate-900 text-white px-4 sm:px-8 py-4 flex flex-wrap justify-between items-center gap-2 sticky top-0 z-30 shadow-md">
+            <div>
+              <h1 class="font-bold text-sm sm:text-base flex items-center gap-2">
+                <span>⚙️</span> ตั้งค่าระบบและฐานข้อมูลแบรนด์: <span class="text-blue-400">${brandObj.name}</span>
+              </h1>
+              <p class="text-[11px] text-slate-400">โชว์รูมปัจจุบัน: <strong class="text-amber-300">${activeSr?.name || state.auth.activeShowroomId}</strong> (ซิงค์ข้อมูลขึ้น Cloud D1 อัตโนมัติ)</p>
+            </div>
             <button onclick="state.step='calc';initBrandSelectionDefaults();render();" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all">
               ← กลับหน้าคำนวณ
             </button>
@@ -1837,12 +2351,12 @@
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
-                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-extrabold">EXCEL / CSV SYNC</span>
-                    <span class="text-xs text-slate-300 font-semibold">เฉพาะข้อมูลแบรนด์: <strong class="text-amber-300">${brandObj.name}</strong></span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-extrabold">EXCEL / CSV + D1 CLOUD SYNC</span>
+                    <span class="text-xs text-slate-300 font-semibold">แบรนด์: <strong class="text-amber-300">${brandObj.name}</strong></span>
                   </div>
                   <h2 class="text-base sm:text-lg font-extrabold tracking-tight">📊 จัดการข้อมูลด้วย Excel (รุ่นรถ • อุปกรณ์ตกแต่ง • ตารางดอกเบี้ย)</h2>
                   <p class="text-xs text-slate-300 leading-relaxed">
-                    กด <strong>"📤 ส่งออกไฟล์ต้นแบบ"</strong> เพื่อดาวน์โหลดไฟล์ Excel (มี 3 แท็บ: <code class="text-amber-300">1_Cars</code>, <code class="text-amber-300">2_Accessories</code>, <code class="text-amber-300">3_Campaigns</code>) ไปแก้ไขตัวเลขหรือเพิ่มแถวใน Excel แล้วกด <strong>"📥 นำเข้า/อัปเดต"</strong> (ระบบจะอัปเดตทับรายการเดิม + เพิ่มรายการใหม่ให้อัตโนมัติ)
+                    กด <strong>"📤 ส่งออกไฟล์ต้นแบบ"</strong> เพื่อดาวน์โหลดไฟล์ Excel (<code class="text-amber-300">1_Cars</code>, <code class="text-amber-300">2_Accessories</code>, <code class="text-amber-300">3_Campaigns</code>) ไปแก้ไขแล้วกด <strong>"📥 นำเข้า/อัปเดต"</strong> ระบบจะอัปเดตทับในเครื่องพร้อมซิงค์ขึ้น Cloud D1 ของโชว์รูมทันที
                   </p>
                 </div>
 
@@ -1861,7 +2375,7 @@
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <h3 class="font-bold text-slate-800 text-base">🏢 ตั้งค่าหัวกระดาษบริษัทและที่ปรึกษาการขาย (เฉพาะแบรนด์: <span class="text-blue-600">${brandObj.name}</span>)</h3>
-                <span class="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">แยกข้อมูลอิสระตามแบรนด์</span>
+                <span class="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">แยกข้อมูลอิสระตามโชว์รูมและแบรนด์</span>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1901,7 +2415,7 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" onclick="exportBrandExcelTemplate('campaigns')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
-                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ
                   </button>
                   <button type="button" onclick="triggerExcelImport('campaigns')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
                     <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
@@ -2132,7 +2646,7 @@
                 <h3 class="font-bold text-slate-800 text-base">🚗 จัดการรุ่นรถและสีตัวถัง (${brandObj.name})</h3>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" onclick="exportBrandExcelTemplate('cars')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
-                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ
                   </button>
                   <button type="button" onclick="triggerExcelImport('cars')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
                     <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
@@ -2266,8 +2780,8 @@
                                   ${(car.colors || []).map(c => `<span class="inline-block bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mr-1 mb-1 text-[11px]">${c.name} (+${fmt(c.price)}฿)</span>`).join('')}
                                 </td>
                                 <td class="p-3 text-center space-x-1">
-                                  <button type="button" onclick="editCar(${car.id})" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">แก้ไข</button>
-                                  <button type="button" onclick="deleteCar(${car.id})" class="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold">ลบ</button>
+                                  <button type="button" onclick="editCar('${car.id}')" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">แก้ไข</button>
+                                  <button type="button" onclick="deleteCar('${car.id}')" class="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold">ลบ</button>
                                 </td>
                               </tr>
                             `).join('')}
@@ -2289,7 +2803,7 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" onclick="exportBrandExcelTemplate('accessories')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
-                    <span>📤</span> ส่งออกไฟล์ต้นแบบ (Export Template)
+                    <span>📤</span> ส่งออกไฟล์ต้นแบบ
                   </button>
                   <button type="button" onclick="triggerExcelImport('accessories')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
                     <span>📥</span> นำเข้า/อัปเดตจาก Excel/CSV
@@ -2380,8 +2894,8 @@
                                 <td class="p-3 font-semibold text-slate-700">${acc.name}</td>
                                 <td class="p-3 text-right font-bold text-blue-600">${fmt(acc.price)} ฿</td>
                                 <td class="p-3 text-center space-x-1">
-                                  <button type="button" onclick="editAccessoryItem(${acc.id})" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">แก้ไข</button>
-                                  <button type="button" onclick="deleteAccessoryItem(${acc.id})" class="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold">ลบ</button>
+                                  <button type="button" onclick="editAccessoryItem('${acc.id}')" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">แก้ไข</button>
+                                  <button type="button" onclick="deleteAccessoryItem('${acc.id}')" class="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold">ลบ</button>
                                 </td>
                               </tr>
                             `).join('')}
@@ -2514,6 +3028,14 @@
     }
 
     function selectBrand(brandId) {
+      const usr = state.auth.user;
+      if (usr && Number(usr.roleTier) !== 3) {
+        const allowed = Array.isArray(usr.allowedBrands) ? usr.allowedBrands : [];
+        if (!allowed.includes('ALL') && !allowed.includes(brandId)) {
+          alert(`🔒 แบรนด์นี้ไม่อยู่ในสิทธิ์ระดับ ${usr.roleTier} ของคุณ หากต้องการเปลี่ยนแบรนด์กรุณาแจ้งแอดมิน`);
+          return;
+        }
+      }
       state.selectedBrand = brandId;
       state.step = 'calc';
       state.discount = 0;
@@ -3478,11 +4000,11 @@
         return `
           <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl border ${isChecked ? 'bg-rose-50/40 border-rose-200' : 'bg-slate-50/70 border-slate-200/80'} transition-all">
             <label class="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
-              <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleMarginAccessory(${acc.id}, this.checked)" class="w-4 h-4 accent-rose-600 rounded cursor-pointer">
+              <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleMarginAccessory('${acc.id}', this.checked)" class="w-4 h-4 accent-rose-600 rounded cursor-pointer">
               <span class="font-semibold text-slate-700 truncate">${acc.name}</span>
             </label>
             <div class="flex items-center gap-1">
-              <input type="text" value="${fmt(acc.price)}" oninput="updateMarginAccessoryPrice(${acc.id}, this.value)" onblur="this.value=fmt(num(this.value))" class="w-20 bg-white border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-right font-bold text-slate-800 outline-none text-xs">
+              <input type="text" value="${fmt(acc.price)}" oninput="updateMarginAccessoryPrice('${acc.id}', this.value)" onblur="this.value=fmt(num(this.value))" class="w-20 bg-white border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-right font-bold text-slate-800 outline-none text-xs">
               <span class="text-[11px] text-slate-500 font-semibold">฿</span>
             </div>
           </div>
@@ -3513,18 +4035,26 @@
         return;
       }
 
-      const newId = Date.now();
+      const newId = `acc_${Date.now()}`;
       const targetModel = formatEPower(String(state.selectedModel || 'ALL').trim().toUpperCase());
-      state.accessoriesList.push({
+      const newAccObj = {
         id: newId,
         brand: state.selectedBrand,
         model: targetModel,
         name,
         price,
         defaultChecked: true
-      });
+      };
+      state.accessoriesList.push(newAccObj);
       state.margin.selectedAccMap[newId] = true;
-      saveToStorage();
+      saveToStorage(false);
+
+      if (state.auth.token) {
+        apiFetch('/api/accessories', {
+          method: 'POST',
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...newAccObj })
+        }).catch(() => null);
+      }
 
       if (nameEl) nameEl.value = '';
       if (priceEl) priceEl.value = '';
@@ -3543,7 +4073,7 @@
       const acc = state.accessoriesList.find(a => a.id == accId);
       if (acc) {
         acc.price = num(priceVal);
-        saveToStorage();
+        saveToStorage(false);
         calculateMarginModal();
       }
     }
@@ -3901,7 +4431,7 @@
     }
 
     // ==================== [สิ้นสุดโค้ดชุดที่ 4 — นำโค้ดชุดที่ 5 มาวางต่อจากบรรทัดนี้] ====================
-// ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1 & 2) & DUAL A4 RENDERERS ====================
+// ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1 & 2) & EXPORT PNG/JPG ====================
 
     function selectPrintTemplate(tplNum) {
       state.printTemplate = tplNum === 2 ? 2 : 1;
@@ -3911,11 +4441,11 @@
       const btn2 = document.getElementById('btnPrintTemplate2');
       if (btn1 && btn2) {
         if (state.printTemplate === 1) {
-          btn1.className = 'flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-extrabold border-2 border-blue-600 bg-blue-50 text-blue-800 shadow-sm transition-all flex items-center justify-center gap-1.5';
-          btn2.className = 'flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5';
+          btn1.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-blue-600 bg-blue-50 text-blue-800 shadow-sm transition-all flex items-center justify-center gap-1.5';
+          btn2.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5';
         } else {
-          btn2.className = 'flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-extrabold border-2 border-slate-900 bg-slate-900 text-white shadow-sm transition-all flex items-center justify-center gap-1.5';
-          btn1.className = 'flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5';
+          btn2.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-slate-900 bg-slate-900 text-white shadow-sm transition-all flex items-center justify-center gap-1.5';
+          btn1.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5';
         }
       }
     }
@@ -4098,7 +4628,7 @@
       return { items, netDelivery: Math.max(netDelivery, 0) };
     }
 
-    function executePrint() {
+    function buildCurrentQuotationContextAndRenderPrintArea() {
       state.sales.name = document.getElementById('modalSalesName').value.trim();
       state.sales.phone = document.getElementById('modalSalesPhone').value.trim();
       state.sales.line = document.getElementById('modalSalesLine').value.trim();
@@ -4118,13 +4648,26 @@
       const customerName = document.getElementById('modalCustomerName').value.trim() || 'ลูกค้าผู้มีอุปการคุณ';
       const dateStr = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
 
-      const basePrice = num(document.getElementById('carPrice')?.value);
-      const discount = num(document.getElementById('discount')?.value);
-      const colorPrice = num(document.getElementById('colorPrice')?.value);
-      const accessories = num(document.getElementById('accessories')?.value);
+      const basePrice = num(document.getElementById('carPrice')?.value ?? state.customCarPrice);
+      const discount = num(document.getElementById('discount')?.value ?? state.discount);
+      const colorPrice = num(document.getElementById('colorPrice')?.value ?? 0);
+      const accessories = num(document.getElementById('accessories')?.value ?? state.accessories);
       const netCar = Math.max(basePrice - discount, 0);
       const netAddon = colorPrice + accessories;
       const finalNet = getNetPriceWithoutDown();
+
+      let deliveryNet = finalNet;
+      if (state.step === 'calc') {
+        const activePlans = state.plans.filter(p => p.isOpen);
+        const primaryPlan = activePlans.length > 0 ? activePlans[0] : state.plans[0];
+        const pm = computePlanMetrics(primaryPlan, finalNet);
+        deliveryNet = getDeliveryLineItems('calc', '', pm.down, primaryPlan.isBeginning ? pm.beginningInstallment : 0, primaryPlan.name).netDelivery;
+      } else if (state.step === 'balloon') {
+        const b = computeBalloonDetails();
+        deliveryNet = getDeliveryLineItems('balloon', '', b.downMain).netDelivery;
+      } else {
+        deliveryNet = getDeliveryLineItems('cash', '', finalNet).netDelivery;
+      }
 
       const ctx = {
         brandObj,
@@ -4139,7 +4682,8 @@
         accessories,
         netCar,
         netAddon,
-        finalNet
+        finalNet,
+        deliveryNet
       };
 
       const printAreaEl = document.getElementById('printArea');
@@ -4148,9 +4692,57 @@
       } else {
         printAreaEl.innerHTML = buildQuotationTemplate1Html(ctx);
       }
+      return ctx;
+    }
 
+    function executePrint() {
+      buildCurrentQuotationContextAndRenderPrintArea();
+      saveCurrentQuotationToHistory(false);
       closePrintModal();
       setTimeout(() => { window.print(); }, 250);
+    }
+
+    async function exportQuotationAsImage(format = 'png') {
+      if (typeof htmlToImage === 'undefined') {
+        alert('กำลังโหลดไลบรารีแปลงรูปภาพ กรุณารอสักครู่แล้วกดอีกครั้ง');
+        return;
+      }
+      const ctx = buildCurrentQuotationContextAndRenderPrintArea();
+      saveCurrentQuotationToHistory(false);
+
+      const printAreaEl = document.getElementById('printArea');
+      printAreaEl.classList.remove('print-only');
+      printAreaEl.classList.add('capture-render-mode');
+
+      try {
+        await new Promise(r => setTimeout(r, 200));
+        const options = {
+          quality: 0.96,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          cacheBust: true
+        };
+        const dataUrl = format === 'jpg'
+          ? await htmlToImage.toJpeg(printAreaEl, options)
+          : await htmlToImage.toPng(printAreaEl, options);
+
+        const safeModel = (ctx.modelText || 'CAR').replace(/[^a-zA-Z0-9ก-๙_-]/g, '_');
+        const safeCust = (ctx.customerName || 'Customer').replace(/[^a-zA-Z0-9ก-๙_-]/g, '_');
+        const fileName = `Quotation_${ctx.brandObj.name}_${safeModel}_${safeCust}.${format}`;
+
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (err) {
+        console.error('Export Image Error:', err);
+        alert('❌ ไม่สามารถสร้างไฟล์รูปภาพได้ (อาจเกิดจากโลโก้ข้ามโดเมน) แนะนำให้กดปุ่ม "พิมพ์ / บันทึก PDF (A4)" แทนครับ');
+      } finally {
+        printAreaEl.classList.remove('capture-render-mode');
+        printAreaEl.classList.add('print-only');
+      }
     }
 
     // ==================== รูปแบบที่ 1: ใบเสนอราคามาตรฐาน ====================
@@ -4294,7 +4886,7 @@
       return `
         <div class="flex justify-between items-start border-b-2 border-slate-900 pb-2 mb-2.5">
           <div class="flex items-center gap-3">
-            <img src="${ctx.brandObj.img}" alt="Brand" class="w-11 h-11 object-contain p-1 border border-slate-200 rounded-xl bg-slate-50">
+            <img src="${ctx.brandObj.img}" crossorigin="anonymous" alt="Brand" class="w-11 h-11 object-contain p-1 border border-slate-200 rounded-xl bg-slate-50">
             <div>
               <h1 class="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">${state.company.name}</h1>
               <p class="text-slate-600 text-[9.5px] mt-0.5 max-w-md leading-snug">${state.company.address}</p>
@@ -4577,7 +5169,7 @@
         <div class="bg-slate-900 text-white rounded-2xl p-3.5 mb-2.5 flex justify-between items-center border-b-4 border-amber-500">
           <div class="flex items-center gap-3">
             <div class="w-12 h-12 rounded-xl bg-white p-1.5 flex items-center justify-center shadow-sm">
-              <img src="${ctx.brandObj.img}" alt="Brand" class="max-h-full max-w-full object-contain">
+              <img src="${ctx.brandObj.img}" crossorigin="anonymous" alt="Brand" class="max-h-full max-w-full object-contain">
             </div>
             <div>
               <div class="text-[8.5px] font-bold tracking-widest text-amber-400 uppercase">${ctx.brandObj.name} AUTHORIZED DEALER</div>
@@ -4681,7 +5273,409 @@
       `;
     }
 
-    // ==================== EXCEL / CSV EXPORT & IMPORT (UPSERT / MERGE BY BRAND) ====================
+    // ==================== QUOTATION HISTORY (บันทึก / ค้นหา / โหลดแก้ไขซ้ำ / ลบ) ====================
+
+    async function saveCurrentQuotationToHistory(showNotify = true) {
+      const ctx = buildCurrentQuotationContextAndRenderPrintArea();
+      const docNo = `QT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
+      const quotId = state.loadedQuotationId || `qt_${Date.now()}`;
+
+      const payloadSnapshot = {
+        selectedBrand: state.selectedBrand,
+        selectedModel: state.selectedModel,
+        selectedCarId: state.selectedCarId,
+        selectedGradeText: state.selectedGradeText,
+        selectedColorIdx: state.selectedColorIdx,
+        selectedColorText: state.selectedColorText,
+        customCarPrice: ctx.basePrice,
+        discount: ctx.discount,
+        accessories: ctx.accessories,
+        driveOffInputText: state.driveOffInputText,
+        printTemplate: state.printTemplate,
+        step: state.step,
+        plans: JSON.parse(JSON.stringify(state.plans)),
+        balloonPlan: JSON.parse(JSON.stringify(state.balloonPlan)),
+        margin: JSON.parse(JSON.stringify(state.margin)),
+        deliveryFees: JSON.parse(JSON.stringify(state.deliveryFees)),
+        sales: JSON.parse(JSON.stringify(state.sales)),
+        customerName: ctx.customerName
+      };
+
+      const record = {
+        id: quotId,
+        doc_no: docNo,
+        showroom_id: state.auth.activeShowroomId,
+        user_id: state.auth.user?.id || 'local',
+        created_by_name: state.auth.user?.fullName || state.sales.name,
+        customer_name: ctx.customerName,
+        brand: state.selectedBrand,
+        model: ctx.modelText,
+        grade: ctx.gradeText,
+        color: ctx.colorText,
+        calc_mode: state.step,
+        net_price: ctx.finalNet,
+        delivery_net: ctx.deliveryNet,
+        payload: payloadSnapshot,
+        updated_at: new Date().toISOString()
+      };
+
+      const existingIdx = state.savedQuotations.findIndex(q => q.id === quotId);
+      if (existingIdx !== -1) state.savedQuotations[existingIdx] = record;
+      else state.savedQuotations.unshift(record);
+
+      localStorage.setItem('multi_brand_quotations', JSON.stringify(state.savedQuotations));
+
+      if (state.auth.token) {
+        apiFetch('/api/quotations', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: quotId,
+            docNo,
+            showroomId: state.auth.activeShowroomId,
+            createdByName: record.created_by_name,
+            customerName: record.customer_name,
+            brand: record.brand,
+            model: record.model,
+            grade: record.grade,
+            color: record.color,
+            calcMode: record.calc_mode,
+            netPrice: record.net_price,
+            deliveryNet: record.delivery_net,
+            payload: payloadSnapshot
+          })
+        }).catch(() => null);
+      }
+
+      if (showNotify) {
+        alert(`✅ บันทึกใบเสนอราคาของ "${ctx.customerName}" (${ctx.brandObj.name} ${ctx.modelText}) เรียบร้อยแล้ว!`);
+      }
+    }
+
+    function openHistoryModal() {
+      document.getElementById('historyModal').classList.remove('hidden');
+      renderHistoryList();
+      refreshQuotationHistoryFromCloud();
+    }
+
+    function closeHistoryModal() {
+      document.getElementById('historyModal').classList.add('hidden');
+    }
+
+    async function refreshQuotationHistoryFromCloud() {
+      if (!state.auth.token) return;
+      try {
+        const res = await apiFetch('/api/quotations');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.quotations)) {
+            const localMap = {};
+            state.savedQuotations.forEach(item => { localMap[item.id] = item; });
+            state.savedQuotations = data.quotations.map(cloudItem => ({
+              ...cloudItem,
+              payload: cloudItem.payload || localMap[cloudItem.id]?.payload || null
+            }));
+            localStorage.setItem('multi_brand_quotations', JSON.stringify(state.savedQuotations));
+            renderHistoryList();
+          }
+        }
+      } catch (e) {}
+    }
+
+    function renderHistoryList() {
+      const container = document.getElementById('historyListContainer');
+      if (!container) return;
+      const q = (document.getElementById('historySearchInput')?.value || '').trim().toLowerCase();
+
+      const filtered = state.savedQuotations.filter(item => {
+        if (!q) return true;
+        return (
+          String(item.customer_name || '').toLowerCase().includes(q) ||
+          String(item.model || '').toLowerCase().includes(q) ||
+          String(item.doc_no || '').toLowerCase().includes(q) ||
+          String(item.brand || '').toLowerCase().includes(q)
+        );
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">ยังไม่มีประวัติใบเสนอราคาที่ตรงกับคำค้นหา</div>`;
+        return;
+      }
+
+      const modeBadge = { calc: 'ผ่อนมาตรฐาน', balloon: 'บอลลูน', cash: 'ซื้อสด' };
+      container.innerHTML = filtered.map(item => {
+        const bName = BRANDS.find(b => b.id === item.brand)?.name || String(item.brand || '').toUpperCase();
+        const dateLabel = item.updated_at ? new Date(item.updated_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+        return `
+          <div class="p-3.5 sm:p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white transition-all flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs">
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2 py-0.5 bg-slate-900 text-white rounded-md font-bold text-[11px]">${item.doc_no || 'QT'}</span>
+                <span class="font-extrabold text-slate-900 text-sm">${item.customer_name || 'ลูกค้าทั่วไป'}</span>
+                <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md font-bold text-[11px]">${bName} ${formatEPower(item.model)}</span>
+                <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md font-bold text-[11px]">${modeBadge[item.calc_mode] || 'ผ่อน'}</span>
+              </div>
+              <div class="text-slate-500 text-[11px]">
+                เกรด: <strong>${formatEPower(item.grade || '-')}</strong> • ราคารถสุทธิ: <strong class="text-slate-800">${fmt(item.net_price)} ฿</strong> • วันรับรถสุทธิ: <strong class="text-emerald-700">${fmt(item.delivery_net)} ฿</strong>
+              </div>
+              <div class="text-slate-400 text-[10.5px]">ผู้จัดทำ: ${item.created_by_name || '-'} • อัปเดตล่าสุด: ${dateLabel}</div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="loadQuotationFromHistory('${item.id}')" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm">📂 โหลดแก้ไขต่อ</button>
+              <button type="button" onclick="deleteQuotationFromHistory('${item.id}')" class="px-3 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-xl font-bold">ลบ</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function loadQuotationFromHistory(quotId) {
+      let item = state.savedQuotations.find(q => q.id === quotId);
+      if ((!item || !item.payload) && state.auth.token) {
+        try {
+          const res = await apiFetch(`/api/quotations/${quotId}`);
+          if (res.ok) item = await res.json();
+        } catch (e) {}
+      }
+      if (!item || !item.payload) {
+        alert('ไม่พบรายละเอียดข้อมูลของใบเสนอราคานี้');
+        return;
+      }
+
+      const p = item.payload;
+      state.loadedQuotationId = item.id;
+      state.selectedBrand = p.selectedBrand || item.brand;
+      loadBrandProfile(state.selectedBrand);
+      state.selectedModel = formatEPower(p.selectedModel || item.model);
+      state.selectedCarId = p.selectedCarId || null;
+      state.selectedGradeText = formatEPower(p.selectedGradeText || item.grade);
+      state.selectedColorIdx = p.selectedColorIdx || 0;
+      state.selectedColorText = p.selectedColorText || item.color;
+      state.customCarPrice = p.customCarPrice ?? 0;
+      state.discount = p.discount ?? 0;
+      state.accessories = p.accessories ?? 0;
+      state.driveOffInputText = p.driveOffInputText || '';
+      state.printTemplate = p.printTemplate || 1;
+      if (p.plans) state.plans = p.plans;
+      if (p.balloonPlan) state.balloonPlan = p.balloonPlan;
+      if (p.margin) state.margin = p.margin;
+      if (p.deliveryFees) state.deliveryFees = p.deliveryFees;
+      if (p.sales) state.sales = p.sales;
+      state.step = p.step || item.calc_mode || 'calc';
+
+      closeHistoryModal();
+      render();
+      if (document.getElementById('modalCustomerName') && p.customerName) {
+        document.getElementById('modalCustomerName').value = p.customerName;
+      }
+    }
+
+    async function deleteQuotationFromHistory(quotId) {
+      if (!confirm('ยืนยันการลบประวัติใบเสนอราคารายการนี้ใช่หรือไม่?')) return;
+      state.savedQuotations = state.savedQuotations.filter(q => q.id !== quotId);
+      localStorage.setItem('multi_brand_quotations', JSON.stringify(state.savedQuotations));
+      renderHistoryList();
+      if (state.auth.token) {
+        apiFetch(`/api/quotations/${quotId}`, { method: 'DELETE' }).catch(() => null);
+      }
+    }
+
+    // ==================== SUPER ADMIN PANEL (ระดับ 3: จัดการผู้ใช้ / สิทธิ์ / โชว์รูม) ====================
+
+    let adminUsersCache = [];
+
+    async function openAdminModal() {
+      if (!state.auth.user || Number(state.auth.user.roleTier) !== 3) return;
+      document.getElementById('adminModal').classList.remove('hidden');
+      document.getElementById('adminModalBody').innerHTML = `<div class="p-8 text-center text-slate-500 text-xs font-bold">⏳ กำลังโหลดข้อมูลผู้ใช้งานและโชว์รูมจาก Cloud D1...</div>`;
+      await loadAdminPanelData();
+    }
+
+    function closeAdminModal() {
+      document.getElementById('adminModal').classList.add('hidden');
+    }
+
+    async function loadAdminPanelData() {
+      try {
+        const [usersRes, srRes] = await Promise.all([
+          apiFetch('/api/admin/users'),
+          apiFetch('/api/admin/showrooms')
+        ]);
+        if (usersRes.ok) {
+          const uData = await usersRes.json();
+          adminUsersCache = uData.users || [];
+        }
+        if (srRes.ok) {
+          const sData = await srRes.json();
+          state.auth.showrooms = sData.showrooms || state.auth.showrooms;
+        }
+        renderAdminPanel();
+      } catch (err) {
+        document.getElementById('adminModalBody').innerHTML = `<div class="p-6 text-center text-rose-600 text-xs font-bold">❌ ไม่สามารถโหลดข้อมูลหลังบ้านได้ กรุณาตรวจสอบการเชื่อมต่อ Worker</div>`;
+      }
+    }
+
+    function renderAdminPanel() {
+      const bodyEl = document.getElementById('adminModalBody');
+      if (!bodyEl) return;
+      const showrooms = state.auth.showrooms || [];
+
+      bodyEl.innerHTML = `
+        <!-- 1. เพิ่มโชว์รูมใหม่ -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
+          <h4 class="font-bold text-slate-900 text-sm">🏢 เพิ่มโชว์รูม / สาขาใหม่ (Multi-Showroom)</h4>
+          <form onsubmit="adminCreateShowroom(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+            <input type="text" id="admSrName" required placeholder="ชื่อบริษัท / โชว์รูม" class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <input type="text" id="admSrBranch" placeholder="สาขา เช่น สาขารังสิต" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <button type="submit" class="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold">+ เพิ่มโชว์รูม</button>
+            <input type="text" id="admSrAddress" placeholder="ที่อยู่โชว์รูม (สำหรับออกใบเสนอราคา)" class="sm:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+          </form>
+        </div>
+
+        <!-- 2. สร้างบัญชีผู้ใช้งานใหม่ -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
+          <h4 class="font-bold text-slate-900 text-sm">➕ สร้างบัญชีผู้ใช้งานใหม่ (กำหนดระดับ 1 / 2 / 3)</h4>
+          <form onsubmit="adminCreateUser(event)" class="grid grid-cols-1 sm:grid-cols-6 gap-2.5 text-xs">
+            <input type="text" id="admNewName" required placeholder="ชื่อ-นามสกุล (ชื่อเล่น)" class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <input type="email" id="admNewEmail" required placeholder="อีเมลเข้าสู่ระบบ" class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <input type="text" id="admNewPass" required placeholder="รหัสผ่านเริ่มต้น" class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+
+            <select id="admNewTier" class="sm:col-span-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-2.5 font-bold outline-none">
+              <option value="1">ระดับ 1 (เลือกได้ 1 แบรนด์)</option>
+              <option value="2">ระดับ 2 (เลือกได้ 3 แบรนด์)</option>
+              <option value="3">ระดับ 3 (Super Admin ทุกแบรนด์)</option>
+            </select>
+            <select id="admNewShowroom" class="sm:col-span-2 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl p-2.5 font-bold outline-none">
+              ${showrooms.map(sr => `<option value="${sr.id}">${sr.name} (${sr.branch || sr.id})</option>`).join('')}
+            </select>
+            <button type="submit" class="sm:col-span-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-sm">✓ สร้างบัญชีผู้ใช้งาน</button>
+          </form>
+        </div>
+
+        <!-- 3. รายชื่อผู้ใช้งานทั้งหมดและปุ่มปรับสิทธิ์แบบ Real-time -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
+          <h4 class="font-bold text-slate-900 text-sm">👥 รายชื่อผู้ใช้งานทั้งหมด (${adminUsersCache.length} บัญชี)</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700">
+                  <th class="p-2.5 border-b border-slate-200">ผู้ใช้งาน / อีเมล</th>
+                  <th class="p-2.5 border-b border-slate-200">โชว์รูม</th>
+                  <th class="p-2.5 border-b border-slate-200">ระดับสิทธิ์</th>
+                  <th class="p-2.5 border-b border-slate-200">แบรนด์ที่เลือกใช้ & สถานะล็อก</th>
+                  <th class="p-2.5 border-b border-slate-200 text-center">จัดการสิทธิ์หลังบ้าน</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${adminUsersCache.map(u => {
+                  const brandLabels = (u.allowedBrands || []).map(id => id === 'ALL' ? 'ทุกแบรนด์' : (BRANDS.find(b => b.id === id)?.name || id)).join(', ') || 'ยังไม่เลือกแบรนด์';
+                  return `
+                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                      <td class="p-2.5">
+                        <div class="font-bold text-slate-900">${u.fullName}</div>
+                        <div class="text-[11px] text-slate-500">${u.email}</div>
+                      </td>
+                      <td class="p-2.5">
+                        <select onchange="adminPatchUser('${u.id}', { showroomId: this.value })" class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-[11px] font-semibold text-slate-800">
+                          ${showrooms.map(sr => `<option value="${sr.id}" ${sr.id === u.showroomId ? 'selected' : ''}>${sr.name}</option>`).join('')}
+                        </select>
+                      </td>
+                      <td class="p-2.5">
+                        <select onchange="adminPatchUser('${u.id}', { roleTier: Number(this.value), canChangeBrand: true })" class="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg p-1.5 text-[11px] font-bold">
+                          <option value="1" ${Number(u.roleTier) === 1 ? 'selected' : ''}>ระดับ 1 (1 แบรนด์)</option>
+                          <option value="2" ${Number(u.roleTier) === 2 ? 'selected' : ''}>ระดับ 2 (3 แบรนด์)</option>
+                          <option value="3" ${Number(u.roleTier) === 3 ? 'selected' : ''}>ระดับ 3 (Admin)</option>
+                        </select>
+                      </td>
+                      <td class="p-2.5">
+                        <div class="font-bold text-slate-800">${brandLabels}</div>
+                        <div class="mt-0.5">
+                          ${Number(u.roleTier) === 3
+                            ? `<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">เข้าได้ทุกแบรนด์</span>`
+                            : (u.canChangeBrand
+                              ? `<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold">🔓 เปิดให้เลือกแบรนด์ได้</span>`
+                              : `<span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded text-[10px] font-bold">🔒 ล็อกแบรนด์อยู่</span>`)}
+                        </div>
+                      </td>
+                      <td class="p-2.5 text-center space-x-1 space-y-1">
+                        ${Number(u.roleTier) !== 3 ? `
+                          <button type="button" onclick="adminPatchUser('${u.id}', { canChangeBrand: ${!u.canChangeBrand} })" class="px-2.5 py-1.5 ${u.canChangeBrand ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white rounded-lg font-bold text-[11px]">
+                            ${u.canChangeBrand ? '🔒 ล็อกแบรนด์' : '🔓 เปิดให้เลือกแบรนด์ใหม่'}
+                          </button>
+                        ` : ''}
+                        <button type="button" onclick="adminResetPassword('${u.id}', '${u.email}')" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-[11px]">🔑 รีเซ็ตรหัส</button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    async function adminCreateShowroom(e) {
+      e.preventDefault();
+      const name = document.getElementById('admSrName')?.value.trim();
+      const branch = document.getElementById('admSrBranch')?.value.trim();
+      const address = document.getElementById('admSrAddress')?.value.trim();
+      if (!name) return;
+
+      const res = await apiFetch('/api/admin/showrooms', {
+        method: 'POST',
+        body: JSON.stringify({ name, branch, address })
+      });
+      if (res.ok) {
+        alert('✅ เพิ่มโชว์รูมใหม่เรียบร้อยแล้ว!');
+        await loadAdminPanelData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'เกิดข้อผิดพลาด');
+      }
+    }
+
+    async function adminCreateUser(e) {
+      e.preventDefault();
+      const fullName = document.getElementById('admNewName')?.value.trim();
+      const email = document.getElementById('admNewEmail')?.value.trim();
+      const password = document.getElementById('admNewPass')?.value.trim();
+      const roleTier = Number(document.getElementById('admNewTier')?.value || 1);
+      const showroomId = document.getElementById('admNewShowroom')?.value;
+
+      const res = await apiFetch('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ fullName, email, password, roleTier, showroomId, canChangeBrand: true })
+      });
+      if (res.ok) {
+        alert('✅ สร้างบัญชีผู้ใช้งานใหม่เรียบร้อยแล้ว!');
+        await loadAdminPanelData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'เกิดข้อผิดพลาด');
+      }
+    }
+
+    async function adminPatchUser(userId, patchBody) {
+      const res = await apiFetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patchBody)
+      });
+      if (res.ok) {
+        await loadAdminPanelData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'ไม่สามารถอัปเดตสิทธิ์ได้');
+      }
+    }
+
+    async function adminResetPassword(userId, email) {
+      const newPassword = prompt(`ตั้งรหัสผ่านใหม่สำหรับ ${email} (อย่างน้อย 4 ตัวอักษร):`);
+      if (!newPassword || newPassword.trim().length < 4) return;
+      await adminPatchUser(userId, { newPassword: newPassword.trim() });
+      alert('✅ เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!');
+    }
+
+    // ==================== EXCEL / CSV EXPORT & IMPORT + CLOUD BULK SYNC ====================
 
     function formatColorsForExcel(colorsArr) {
       if (!Array.isArray(colorsArr) || colorsArr.length === 0) return 'สีมาตรฐาน:0';
@@ -4716,7 +5710,6 @@
       const brandObj = BRANDS.find(b => b.id === brandId) || { name: brandId.toUpperCase() };
       const wb = XLSX.utils.book_new();
 
-      // 1. Sheet: 1_Cars (เฉพาะแบรนด์ที่เลือก)
       if (scope === 'all' || scope === 'cars') {
         const brandCars = state.cars.filter(c => c.brand === brandId);
         const carsRows = brandCars.length > 0 ? brandCars.map(c => ({
@@ -4748,7 +5741,6 @@
         XLSX.utils.book_append_sheet(wb, wsCars, '1_Cars');
       }
 
-      // 2. Sheet: 2_Accessories (เฉพาะแบรนด์ที่เลือก)
       if (scope === 'all' || scope === 'accessories') {
         const brandAcc = state.accessoriesList.filter(a => a.brand === brandId);
         const accRows = brandAcc.length > 0 ? brandAcc.map(a => ({
@@ -4770,7 +5762,6 @@
         XLSX.utils.book_append_sheet(wb, wsAcc, '2_Accessories');
       }
 
-      // 3. Sheet: 3_Campaigns (เฉพาะแบรนด์ที่เลือก โดย 1 แคมเปญ = 7 แถวตามขั้นเงินดาวน์ 30,25,20,15,10,5,0)
       if (scope === 'all' || scope === 'campaigns') {
         const brandCamps = getCampaignsForCurrentBrand().map(item => item.cp);
         const campRows = [];
@@ -4879,6 +5870,7 @@
     function upsertCarsFromSheetRows(rows, brandId) {
       let updatedCount = 0;
       let addedCount = 0;
+      const touchedItems = [];
 
       rows.forEach(row => {
         const rawModel = String(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], '')).trim();
@@ -4911,10 +5903,11 @@
           existing.insurance = insurance;
           existing.regFee = regFee;
           existing.colors = colors;
+          touchedItems.push(existing);
           updatedCount++;
         } else {
-          state.cars.push(normalizeCar({
-            id: Date.now() + Math.floor(Math.random() * 100000),
+          const newCar = normalizeCar({
+            id: `car_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
             brand: brandId,
             model,
             grade,
@@ -4926,18 +5919,21 @@
             insurance,
             regFee,
             colors
-          }));
+          });
+          state.cars.push(newCar);
+          touchedItems.push(newCar);
           addedCount++;
         }
         state.expandedCarFolders[model] = true;
       });
 
-      return { updatedCount, addedCount };
+      return { updatedCount, addedCount, touchedItems };
     }
 
     function upsertAccessoriesFromSheetRows(rows, brandId) {
       let updatedCount = 0;
       let addedCount = 0;
+      const touchedItems = [];
 
       rows.forEach(row => {
         const rawModel = String(getRowVal(row, ['ชื่อรุ่นรถ', 'Model'], '')).trim();
@@ -4959,31 +5955,33 @@
           existing.price = price;
           existing.defaultChecked = defaultChecked;
           state.margin.selectedAccMap[existing.id] = defaultChecked;
+          touchedItems.push(existing);
           updatedCount++;
         } else {
-          const newId = Date.now() + Math.floor(Math.random() * 100000);
-          state.accessoriesList.push({
+          const newId = `acc_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+          const newAcc = {
             id: newId,
             brand: brandId,
             model,
             name: rawName,
             price,
             defaultChecked
-          });
+          };
+          state.accessoriesList.push(newAcc);
           state.margin.selectedAccMap[newId] = defaultChecked;
+          touchedItems.push(newAcc);
           addedCount++;
         }
         state.expandedAccFolders[model] = true;
       });
 
-      return { updatedCount, addedCount };
+      return { updatedCount, addedCount, touchedItems };
     }
 
     function upsertCampaignsFromSheetRows(rows, brandId) {
       let updatedCount = 0;
       let addedCount = 0;
-
-      // จัดกลุ่มแถวตาม (Finance + Campaign_Name + Car_Model + Is_EasyPay)
+      const touchedItems = [];
       const groupedMap = {};
 
       rows.forEach(row => {
@@ -5062,15 +6060,18 @@
         );
 
         if (existingIdx !== -1) {
+          normalized.id = state.campaigns[existingIdx].id;
           state.campaigns[existingIdx] = normalized;
           updatedCount++;
         } else {
+          normalized.id = `cmp_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
           state.campaigns.push(normalized);
           addedCount++;
         }
+        touchedItems.push(normalized);
       });
 
-      return { updatedCount, addedCount };
+      return { updatedCount, addedCount, touchedItems };
     }
 
     function handleExcelImportFile(event) {
@@ -5086,12 +6087,15 @@
       const brandObj = BRANDS.find(b => b.id === brandId) || { name: brandId.toUpperCase() };
       const reader = new FileReader();
 
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
 
           let summaryLines = [];
+          let bulkCars = [];
+          let bulkAccs = [];
+          let bulkCamps = [];
 
           workbook.SheetNames.forEach(sheetName => {
             const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
@@ -5100,21 +6104,23 @@
             const sLower = sheetName.toLowerCase();
             const firstRowKeys = Object.keys(rows[0]).join(' ').toLowerCase();
 
-            // ตรวจจับว่าเป็น Sheet รุ่นรถ, อุปกรณ์ตกแต่ง หรือ แคมเปญดอกเบี้ย
             if (sLower.includes('car') || firstRowKeys.includes('mg_normal') || firstRowKeys.includes('ราคารถตั้งต้น')) {
               const res = upsertCarsFromSheetRows(rows, brandId);
               if (res.updatedCount > 0 || res.addedCount > 0) {
                 summaryLines.push(`🚗 รุ่นรถและสีตัวถัง: อัปเดตทับ ${res.updatedCount} รายการ | เพิ่มใหม่ ${res.addedCount} รายการ`);
+                bulkCars.push(...res.touchedItems);
               }
             } else if (sLower.includes('acc') || firstRowKeys.includes('accessory_name') || firstRowKeys.includes('ชื่ออุปกรณ์')) {
               const res = upsertAccessoriesFromSheetRows(rows, brandId);
               if (res.updatedCount > 0 || res.addedCount > 0) {
                 summaryLines.push(`🎁 อุปกรณ์ตกแต่ง: อัปเดตทับ ${res.updatedCount} รายการ | เพิ่มใหม่ ${res.addedCount} รายการ`);
+                bulkAccs.push(...res.touchedItems);
               }
             } else if (sLower.includes('camp') || firstRowKeys.includes('down_tier') || firstRowKeys.includes('บริษัทไฟแนนซ์')) {
               const res = upsertCampaignsFromSheetRows(rows, brandId);
               if (res.updatedCount > 0 || res.addedCount > 0) {
                 summaryLines.push(`🏦 แคมเปญและตารางดอกเบี้ย: อัปเดตทับ ${res.updatedCount} แคมเปญ | เพิ่มใหม่ ${res.addedCount} แคมเปญ`);
+                bulkCamps.push(...res.touchedItems);
               }
             }
           });
@@ -5125,9 +6131,24 @@
           }
 
           ensureValidTermsForPlans();
-          saveToStorage();
+          saveToStorage(false);
           render();
-          alert(`✅ นำเข้าและอัปเดตข้อมูลแบรนด์ ${brandObj.name} สำเร็จ!\n\n` + summaryLines.join('\n'));
+
+          // ซิงค์ข้อมูลที่อัปโหลดจาก Excel ขึ้น Cloud D1 Database ทันที
+          if (state.auth.token) {
+            const srId = state.auth.activeShowroomId;
+            if (bulkCars.length > 0) {
+              apiFetch('/api/cars/bulk', { method: 'POST', body: JSON.stringify({ showroomId: srId, items: bulkCars }) }).catch(() => null);
+            }
+            if (bulkAccs.length > 0) {
+              apiFetch('/api/accessories/bulk', { method: 'POST', body: JSON.stringify({ showroomId: srId, items: bulkAccs }) }).catch(() => null);
+            }
+            if (bulkCamps.length > 0) {
+              apiFetch('/api/campaigns/bulk', { method: 'POST', body: JSON.stringify({ showroomId: srId, items: bulkCamps }) }).catch(() => null);
+            }
+          }
+
+          alert(`✅ นำเข้าและอัปเดตข้อมูลแบรนด์ ${brandObj.name} สำเร็จ (พร้อมซิงค์ขึ้น Cloud D1)!\n\n` + summaryLines.join('\n'));
         } catch (err) {
           console.error('Excel Import Error:', err);
           alert('❌ เกิดข้อผิดพลาดในการอ่านไฟล์ Excel/CSV กรุณาตรวจสอบรูปแบบไฟล์');
@@ -5181,7 +6202,7 @@
       state.sales.phone = document.getElementById('settingSalesPhone').value.trim();
       state.sales.line = document.getElementById('settingSalesLine').value.trim();
       state.sales.branch = document.getElementById('settingSalesBranch').value.trim();
-      saveToStorage();
+      saveToStorage(true);
       alert(`✅ บันทึกข้อมูลบริษัทและที่ปรึกษาการขายสำหรับแบรนด์ ${brandObj.name} เรียบร้อยแล้ว!`);
     }
 
@@ -5222,9 +6243,8 @@
 
       try {
         const base64DataUrl = await fileToBase64(file);
-        const res = await fetch('/api/extract-rates', {
+        const res = await apiFetch('/api/extract-rates', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64DataUrl, mimeType: file.type })
         }).catch(() => null);
 
@@ -5323,7 +6343,9 @@
         ? [...new Set([easyCommCol1, easyCommCol2])].sort((a, b) => a - b)
         : parseCommOptionsList(rawCommOptionsText, comPct);
 
+      const existingId = state.editingCampaignIndex !== null ? state.campaigns[state.editingCampaignIndex]?.id : null;
       const campaignData = normalizeCampaign({
+        id: existingId || `cmp_${Date.now()}`,
         brand: state.selectedBrand,
         finance,
         campaignName: finalCampName,
@@ -5352,12 +6374,13 @@
       }
 
       ensureValidTermsForPlans();
-      saveToStorage();
-      fetch('/api/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campaignData)
-      }).catch(() => null);
+      saveToStorage(false);
+      if (state.auth.token) {
+        apiFetch('/api/campaigns', {
+          method: 'POST',
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...campaignData })
+        }).catch(() => null);
+      }
 
       render();
       alert('✅ บันทึกข้อมูลแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
@@ -5376,8 +6399,12 @@
 
     function deleteCampaign(index) {
       if (confirm('ยืนยันการลบแคมเปญไฟแนนซ์นี้ใช่หรือไม่?')) {
+        const target = state.campaigns[index];
         state.campaigns.splice(index, 1);
-        saveToStorage();
+        saveToStorage(false);
+        if (state.auth.token && target?.id) {
+          apiFetch(`/api/campaigns/${target.id}`, { method: 'DELETE' }).catch(() => null);
+        }
         render();
       }
     }
@@ -5419,6 +6446,7 @@
       });
 
       const finalColors = colors.length > 0 ? colors : [{ name: 'สีมาตรฐาน', price: 0 }];
+      let savedCarObj = null;
 
       if (state.editingCarId !== null) {
         const car = state.cars.find(c => c.id == state.editingCarId);
@@ -5433,11 +6461,12 @@
           car.mgOther = mgOther;
           car.mg = mgNormal;
           car.colors = finalColors;
+          savedCarObj = car;
         }
         state.editingCarId = null;
       } else {
-        state.cars.push(normalizeCar({
-          id: Date.now(),
+        savedCarObj = normalizeCar({
+          id: `car_${Date.now()}`,
           brand: state.selectedBrand,
           model,
           grade,
@@ -5449,16 +6478,18 @@
           mgOther,
           mg: mgNormal,
           colors: finalColors
-        }));
+        });
+        state.cars.push(savedCarObj);
       }
 
       state.expandedCarFolders[model] = true;
-      saveToStorage();
-      fetch('/api/cars', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: state.selectedBrand, model, grade, price, insurance, regFee, mgNormal, mgSpecial, mgOther, mg: mgNormal, colors: finalColors })
-      }).catch(() => null);
+      saveToStorage(false);
+      if (state.auth.token && savedCarObj) {
+        apiFetch('/api/cars', {
+          method: 'POST',
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...savedCarObj })
+        }).catch(() => null);
+      }
 
       render();
       alert('✅ บันทึกข้อมูลรุ่นรถเรียบร้อยแล้ว!');
@@ -5478,7 +6509,10 @@
     function deleteCar(id) {
       if (confirm('ยืนยันการลบข้อมูลรุ่นรถนี้ใช่หรือไม่?')) {
         state.cars = state.cars.filter(c => c.id != id);
-        saveToStorage();
+        saveToStorage(false);
+        if (state.auth.token) {
+          apiFetch(`/api/cars/${id}`, { method: 'DELETE' }).catch(() => null);
+        }
         render();
       }
     }
@@ -5512,29 +6546,39 @@
         return;
       }
 
+      let savedAccObj = null;
       if (state.editingAccessoryId !== null) {
         const acc = state.accessoriesList.find(a => a.id == state.editingAccessoryId);
         if (acc) {
           acc.model = model;
           acc.name = name;
           acc.price = price;
+          savedAccObj = acc;
         }
         state.editingAccessoryId = null;
       } else {
-        const newId = Date.now();
-        state.accessoriesList.push({
+        const newId = `acc_${Date.now()}`;
+        savedAccObj = {
           id: newId,
           brand: state.selectedBrand,
           model,
           name,
           price,
           defaultChecked: true
-        });
+        };
+        state.accessoriesList.push(savedAccObj);
         state.margin.selectedAccMap[newId] = true;
       }
 
       state.expandedAccFolders[model] = true;
-      saveToStorage();
+      saveToStorage(false);
+      if (state.auth.token && savedAccObj) {
+        apiFetch('/api/accessories', {
+          method: 'POST',
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...savedAccObj })
+        }).catch(() => null);
+      }
+
       render();
       alert('✅ บันทึกข้อมูลอุปกรณ์ตกแต่งเรียบร้อยแล้ว!');
     }
@@ -5554,11 +6598,16 @@
       if (confirm('ยืนยันการลบอุปกรณ์ตกแต่งรายการนี้ใช่หรือไม่?')) {
         state.accessoriesList = state.accessoriesList.filter(a => a.id != id);
         delete state.margin.selectedAccMap[id];
-        saveToStorage();
+        saveToStorage(false);
+        if (state.auth.token) {
+          apiFetch(`/api/accessories/${id}`, { method: 'DELETE' }).catch(() => null);
+        }
         render();
       }
     }
 
+    // ==================== BOOTSTRAP APP ====================
+    loadAuthSessionFromLocal();
     loadDataFromStorage();
     render();
     syncFromCloud();
