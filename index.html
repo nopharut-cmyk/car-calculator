@@ -10,8 +10,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS (xlsx) สำหรับส่งออกและนำเข้าไฟล์ Excel (.xlsx 3 Sheets) และ CSV -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- html-to-image สำหรับบันทึกใบเสนอราคาเป็นไฟล์รูปภาพ PNG / JPG ความละเอียดสูง -->
-  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
+  <!-- html2canvas สำหรับบันทึกใบเสนอราคาเป็นไฟล์รูปภาพ PNG / JPG ความละเอียดสูง (คมชัด 100% ไม่ขาวว่างเปล่า) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -33,7 +33,7 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-    /* Print Media Query - A4 1 Page Strict Lock (รองรับทั้งรูปแบบที่ 1 และ รูปแบบที่ 2) */
+    /* Print Media Query - A4 1 Page Strict Lock (รองรับทั้งรูปแบบที่ 1, รูปแบบที่ 2 และ รูปแบบที่ 3) */
     @media print {
       @page {
         size: A4 portrait;
@@ -49,7 +49,7 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      #app, #printModal, #marginModal, #historyModal, #adminModal, .no-print {
+      #app, #printModal, #marginModal, #historyModal, #adminModal, #imageCaptureOverlay, .no-print {
         display: none !important;
       }
       #printArea {
@@ -71,17 +71,19 @@
       }
     }
     .print-only { display: none; }
-    /* โหมดเรนเดอร์ Off-screen สำหรับแปลงใบเสนอราคาเป็นรูปภาพ PNG / JPG */
+    /* โหมดเรนเดอร์สำหรับ html2canvas จับภาพใบเสนอราคาขนาด A4 (794px) คมชัดไม่ขาวว่างเปล่า */
     .capture-render-mode {
       display: block !important;
       position: fixed !important;
-      left: -9999px !important;
+      left: 0 !important;
       top: 0 !important;
       width: 794px !important;
+      min-height: 1122px !important;
       background: #ffffff !important;
       padding: 20px 24px !important;
       box-sizing: border-box !important;
-      z-index: -1 !important;
+      z-index: 40 !important;
+      pointer-events: none !important;
     }
   </style>
 </head>
@@ -89,6 +91,13 @@
   
   <!-- Main Application Container -->
   <div id="app" class="flex-1 flex flex-col no-print"></div>
+
+  <!-- Overlay แสดงสถานะขณะกำลังสร้างไฟล์รูปภาพ PNG / JPG -->
+  <div id="imageCaptureOverlay" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[60] hidden flex flex-col items-center justify-center text-white p-4 no-print">
+    <div class="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+    <div class="font-bold text-sm sm:text-base">กำลังสร้างไฟล์รูปภาพใบเสนอราคาความละเอียดสูง...</div>
+    <div class="text-xs text-slate-300 mt-1">กรุณารอสักครู่ ระบบกำลังจัดหน้ากระดาษขนาด A4</div>
+  </div>
 
   <!-- Hidden File Input สำหรับนำเข้าไฟล์ Excel / CSV -->
   <input type="file" id="globalExcelImportInput" accept=".xlsx,.xls,.csv" class="hidden no-print" onchange="handleExcelImportFile(event)">
@@ -469,7 +478,35 @@
           <textarea id="modalFreebies" rows="4" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none leading-relaxed text-xs" placeholder="1. ประกันภัยชั้น 1 + พ.ร.บ.&#10;2. ฟิล์มกรองแสงเซรามิกรอบคัน&#10;3. ผ้ายางเข้ารูป / กรอบป้ายทะเบียน"></textarea>
         </div>
 
-        <!-- กล่องแสดง Preview เอกสารผู้เช่าซื้อและผู้ค้ำประกัน -->
+        <!-- กล่องแนบรูปรถยนต์ (แสดงเฉพาะเมื่อเลือกรูปแบบที่ 3 - จำรูปรถแยกตามรุ่นรถอัตโนมัติ) -->
+        <div id="modalTemplate3CarPhotoBox" class="hidden p-3.5 rounded-2xl bg-amber-50/80 border-2 border-amber-300/80 text-xs space-y-2.5">
+          <div class="flex flex-wrap justify-between items-center gap-2">
+            <div>
+              <span class="font-extrabold text-amber-950 flex items-center gap-1.5">
+                <span>🚘</span> แนบรูปรถยนต์สำหรับใบเสนอราคา "รูปแบบที่ 3" <span id="tpl3PhotoModelLabel" class="text-amber-700 underline"></span>
+              </span>
+              <span class="text-[11px] text-amber-800 block mt-0.5">ระบบจะจำรูปรถแยกตามรุ่นรถ (Model) ให้อัตโนมัติ สามารถอัปโหลดเปลี่ยนรูปใหม่ได้ทุกเมื่อ</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="file" id="tpl3CarPhotoInput" accept="image/*" class="hidden" onchange="handleTemplate3CarPhotoUpload(event)">
+              <button type="button" onclick="document.getElementById('tpl3CarPhotoInput').click()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all flex items-center gap-1.5">
+                <span>📷</span> <span id="tpl3UploadBtnText">เลือกรูปรถ / อัปโหลดใหม่</span>
+              </button>
+              <button type="button" id="tpl3RemovePhotoBtn" onclick="removeTemplate3CarPhoto()" class="hidden px-2.5 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-colors">
+                ลบรูป
+              </button>
+            </div>
+          </div>
+          <div id="tpl3CarPhotoPreviewWrap" class="hidden flex items-center gap-3 bg-white p-2.5 rounded-xl border border-amber-200">
+            <img id="tpl3CarPhotoPreviewImg" src="" alt="Car Preview" class="w-28 h-16 object-cover rounded-lg border border-slate-200 bg-slate-100">
+            <div class="text-[11px] text-slate-600">
+              <div class="font-bold text-emerald-700">✓ บันทึกรูปรถสำหรับรุ่นนี้เรียบร้อยแล้ว</div>
+              <div>รูปนี้จะแสดงในส่วนหัวใบเสนอราคารูปแบบที่ 3 อัตโนมัติ</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- กล่องแสดง Preview เอกสารผู้เช่าซื้อและผู้ค้ำประกัน (ซ่อนอัตโนมัติในรูปแบบที่ 3 และโหมดซื้อสด) -->
         <div id="modalDocPreviewBox" class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
           <div class="flex justify-between items-center">
             <span id="modalDocPreviewTitle" class="font-bold text-slate-800">📄 เอกสารผู้เช่าซื้อและผู้ค้ำประกัน (บุคคล)</span>
@@ -479,21 +516,24 @@
         </div>
       </div>
 
-      <!-- Footer: แถว 1 เลือกรูปแบบ (1/2) + บันทึกประวัติ | แถว 2 Export PNG / JPG / พิมพ์ PDF -->
+      <!-- Footer: แถว 1 เลือกรูปแบบ (1 / 2 / 3) + บันทึกประวัติ | แถว 2 Export PNG / JPG / พิมพ์ PDF -->
       <div class="pt-3 border-t border-slate-100 space-y-2.5">
-        <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2">
-          <!-- ปุ่มเลือกรูปแบบใบเสนอราคา 2 แบบ -->
-          <div class="flex items-center gap-2">
-            <button type="button" id="btnPrintTemplate1" onclick="selectPrintTemplate(1)" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1.5">
+        <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-2">
+          <!-- ปุ่มเลือกรูปแบบใบเสนอราคา 3 แบบ -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" id="btnPrintTemplate1" onclick="selectPrintTemplate(1)" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1">
               <span>📄</span> รูปแบบที่ 1 (มาตรฐาน)
             </button>
-            <button type="button" id="btnPrintTemplate2" onclick="selectPrintTemplate(2)" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1.5">
+            <button type="button" id="btnPrintTemplate2" onclick="selectPrintTemplate(2)" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1">
               <span>✨</span> รูปแบบที่ 2 (พรีเมียม)
+            </button>
+            <button type="button" id="btnPrintTemplate3" onclick="selectPrintTemplate(3)" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-extrabold border-2 transition-all flex items-center justify-center gap-1">
+              <span>🚘</span> รูปแบบที่ 3 (รูปรถหรู)
             </button>
           </div>
 
-          <button type="button" onclick="saveCurrentQuotationToHistory(true)" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-extrabold transition-colors flex items-center justify-center gap-1.5">
-            <span>💾</span> บันทึกดีลเข้าประวัติใบเสนอราคา
+          <button type="button" onclick="saveCurrentQuotationToHistory(true)" class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-extrabold transition-colors flex items-center justify-center gap-1.5 shrink-0">
+            <span>💾</span> บันทึกดีลเข้าประวัติ
           </button>
         </div>
 
@@ -554,7 +594,7 @@
     </div>
   </div>
 
-  <!-- พื้นที่สำหรับพิมพ์ A4 (1 หน้าพอดี ไม่มีช่องเซ็นชื่อด้านล่าง - สลับเรนเดอร์ระหว่างรูปแบบที่ 1 และ รูปแบบที่ 2 อัตโนมัติ) -->
+  <!-- พื้นที่สำหรับพิมพ์ A4 (1 หน้าพอดี ไม่มีช่องเซ็นชื่อด้านล่าง - สลับเรนเดอร์ระหว่างรูปแบบที่ 1, 2 และ 3 อัตโนมัติ) -->
   <div id="printArea" class="print-only text-slate-900 font-sans"></div>
 
   <!-- ==================== [สิ้นสุดโค้ดชุดที่ 1 — พิมพ์ "ต่อชุดที่ 2" เพื่อรับโค้ดชุดถัดไป] ==================== -->
@@ -584,7 +624,7 @@
       }
     };
 
-    // จัดเรียงแบรนด์ตามลำดับตัวอักษรภาษาอังกฤษ A - Z และอัปเดตโลโก้ Mitsubishi ใหม่
+    // จัดเรียงแบรนด์ตามลำดับตัวอักษรภาษาอังกฤษ A - Z และใช้โลโก้ Mitsubishi ใหม่
     const BRANDS = [
       { id: 'byd', name: 'BYD', img: 'https://img2.pic.in.th/BYD.png' },
       { id: 'Changan', name: 'CHANGAN', img: 'https://img1.pic.in.th/images/Changan.png' },
@@ -619,7 +659,8 @@
         deviceId: '',
         deviceLabel: ''
       },
-      brandLogoDataUrls: {}, // แคชโลโก้แบบ Base64 DataURL เพื่อไม่ให้ภาพเสียตอนพิมพ์และบันทึกรูป PNG/JPG
+      brandLogoDataUrls: {}, // แคชโลโก้แบรนด์แบบ Base64 DataURL
+      carModelPhotos: {},    // เก็บรูปรถแยกตามแบรนด์และรุ่นรถ { "nissan__ALMERA": "data:image/jpeg;base64,..." } สำหรับใบเสนอราคารูปแบบที่ 3
       savedQuotations: [],
       loadedQuotationId: null,
       selectedBrand: null,
@@ -632,7 +673,7 @@
       discount: 0,
       accessories: 0,
       driveOffInputText: '',
-      printTemplate: 1,
+      printTemplate: 1, // 1 = มาตรฐาน | 2 = พรีเมียม | 3 = หรูหราพร้อมรูปรถ (ภาษาไทย)
       pendingImportMode: 'all',
       expandedFinanceFolders: {},
       expandedCampaignSubFolders: {},
@@ -739,14 +780,36 @@
       state.auth.deviceLabel = deviceType;
     }
 
-    // ==================== LOGO BASE64 PRELOADER (แก้ปัญหาภาพโลโก้ไม่ขึ้นตอนพิมพ์ & บันทึกรูป PNG/JPG) ====================
+    // ==================== LOGO & CAR PHOTO BASE64 HANDLERS ====================
 
     function buildBrandSvgFallbackDataUrl(brandName) {
       const label = String(brandName || 'CAR').toUpperCase();
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
         <rect width="160" height="160" rx="24" fill="#0f172a"/>
-        <rect x="8" y="8" width="144" height="144" rx="18" fill="none" stroke="#38bdf8" stroke-width="4"/>
+        <rect x="8" y="8" width="144" height="144" rx="18" fill="none" stroke="#d97706" stroke-width="4"/>
         <text x="80" y="88" font-family="sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">${label}</text>
+      </svg>`;
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    function buildDefaultCarHeroSvgDataUrl(brandName, modelName) {
+      const bLbl = String(brandName || 'AUTO').toUpperCase();
+      const mLbl = formatEPower(modelName || 'EXECUTIVE EDITION');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320" viewBox="0 0 640 320">
+        <defs>
+          <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#f8f5ef"/>
+            <stop offset="60%" stop-color="#e7dec8"/>
+            <stop offset="100%" stop-color="#cbbba0"/>
+          </linearGradient>
+        </defs>
+        <rect width="640" height="320" rx="20" fill="url(#bgGrad)"/>
+        <circle cx="510" cy="70" r="140" fill="#ffffff" opacity="0.35"/>
+        <path d="M90 215 Q165 135 315 135 Q455 135 545 195 L565 225 L75 225 Z" fill="#1e293b" opacity="0.14"/>
+        <ellipse cx="195" cy="228" rx="36" ry="36" fill="#1e293b" opacity="0.22"/>
+        <ellipse cx="455" cy="228" rx="36" ry="36" fill="#1e293b" opacity="0.22"/>
+        <text x="320" y="155" font-family="sans-serif" font-size="26" font-weight="bold" fill="#475569" text-anchor="middle">${bLbl} ${mLbl}</text>
+        <text x="320" y="185" font-family="sans-serif" font-size="14" fill="#78716c" text-anchor="middle">(สามารถกดปุ่ม "เลือกรูปรถ" เพื่อแนบภาพรถยนต์รุ่นนี้ได้)</text>
       </svg>`;
       return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
@@ -755,7 +818,6 @@
       if (!brandObj || !brandObj.img) return buildBrandSvgFallbackDataUrl(brandObj?.name || 'CAR');
       if (state.brandLogoDataUrls[brandObj.id]) return state.brandLogoDataUrls[brandObj.id];
 
-      // ลองโหลดผ่าน fetch / Image และแปลงเป็น DataURL เพื่อหลีกเลี่ยง Cross-Origin Tainted Canvas และปัญหาพิมพ์รูปไม่ติด
       const candidateUrls = [
         brandObj.img,
         `https://wsrv.nl/?url=${encodeURIComponent(brandObj.img.replace(/^https?:\/\//, ''))}&output=png`
@@ -777,9 +839,7 @@
               return dataUrl;
             }
           }
-        } catch (e) {
-          // ข้ามไปลอง URL ถัดไป
-        }
+        } catch (e) {}
       }
 
       const fallback = buildBrandSvgFallbackDataUrl(brandObj.name);
@@ -790,6 +850,17 @@
     function getResolvedBrandLogoSrc(brandObj) {
       if (!brandObj) return buildBrandSvgFallbackDataUrl('CAR');
       return state.brandLogoDataUrls[brandObj.id] || brandObj.img || buildBrandSvgFallbackDataUrl(brandObj.name);
+    }
+
+    function getCarPhotoStorageKey(brandId, modelName) {
+      const b = String(brandId || state.selectedBrand || 'car').trim().toLowerCase();
+      const m = getModelFolderKey(modelName || state.selectedModel || 'DEFAULT');
+      return `${b}__${m}`;
+    }
+
+    function getSavedCarPhotoForCurrentModel(modelOverride = null) {
+      const key = getCarPhotoStorageKey(state.selectedBrand, modelOverride || state.selectedModel);
+      return state.carModelPhotos[key] || '';
     }
 
     // ==================== SMART FOLDER GROUPING KEYS ====================
@@ -821,7 +892,6 @@
       if (sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
       sessionHeartbeatTimer = setInterval(async () => {
         if (!state.auth.token || !state.auth.user || state.step === 'login') return;
-        // ตรวจสอบเฉพาะผู้ใช้ทั่วไป (ระดับ 1-2) ยกเว้น Super Admin (ระดับ 3)
         if (Number(state.auth.user.roleTier) === 3) return;
         try {
           const res = await apiFetch('/api/auth/me');
@@ -829,7 +899,7 @@
             forceKickOutDueToOtherDevice();
           }
         } catch (e) {}
-      }, 15000); // เช็กสถานะทุก 15 วินาที เพื่อให้เครื่องเดิมเด้งออกทันทีเมื่อมีการล็อกอินซ้อน
+      }, 15000);
     }
 
     function forceKickOutDueToOtherDevice() {
@@ -1119,13 +1189,16 @@
         const localAcc = localStorage.getItem('multi_brand_accessories');
         const localProfiles = localStorage.getItem('multi_brand_profiles');
         const localQuots = localStorage.getItem('multi_brand_quotations');
+        const localPhotos = localStorage.getItem('multi_brand_car_photos');
         const savedTpl = localStorage.getItem('multi_brand_print_template');
         if (localCars) state.cars = JSON.parse(localCars).map(normalizeCar);
         if (localCamps) state.campaigns = JSON.parse(localCamps).map(normalizeCampaign);
         if (localAcc) state.accessoriesList = JSON.parse(localAcc).map(a => ({ ...a, model: formatEPower(cleanDisplaySpaces(a.model).toUpperCase()) }));
         if (localProfiles) state.brandProfiles = JSON.parse(localProfiles);
         if (localQuots) state.savedQuotations = JSON.parse(localQuots);
+        if (localPhotos) state.carModelPhotos = JSON.parse(localPhotos);
         if (savedTpl === '2') state.printTemplate = 2;
+        else if (savedTpl === '3') state.printTemplate = 3;
       } catch (err) { console.warn('LocalStorage parse error:', err); }
 
       if (!state.cars || state.cars.length === 0) {
@@ -1297,6 +1370,11 @@
       localStorage.setItem('multi_brand_campaigns', JSON.stringify(state.campaigns));
       localStorage.setItem('multi_brand_accessories', JSON.stringify(state.accessoriesList));
       localStorage.setItem('multi_brand_print_template', String(state.printTemplate || 1));
+      try {
+        localStorage.setItem('multi_brand_car_photos', JSON.stringify(state.carModelPhotos));
+      } catch (e) {
+        console.warn('Car photo storage quota warning:', e);
+      }
       if (syncProfileToCloud) {
         saveCurrentBrandProfile();
       } else if (state.selectedBrand) {
@@ -1384,7 +1462,6 @@
         });
         const data = await res.json();
 
-        // กรณีผู้ใช้ทั่วไป (ระดับ 1-2) มีการล็อกอินค้างอยู่บนอุปกรณ์อื่น (409 DEVICE_CONFLICT)
         if (res.status === 409 && data.code === 'DEVICE_CONFLICT') {
           const confirmMsg = "บัญชีอีเมลนี้กำลังใช้งานอยู่บนอุปกรณ์อื่น หากเข้าสู่ระบบบนอุปกรณ์นี้ ระบบจะออกจากระบบบนอุปกรณ์เดิมทันที กด 'ตกลง' เพื่อเข้าสู่ระบบ หรือ 'ยกเลิก'";
           if (confirm(confirmMsg)) {
@@ -4729,23 +4806,106 @@
       updateBlackSummaryBoxDOM();
       document.getElementById('marginModal').classList.add('hidden');
     }
-// ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1 & 2) & EXPORT PNG/JPG ====================
+// ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1, 2, 3) & EXPORT PNG/JPG ====================
+
+    function updateTemplate3PhotoUI() {
+      const photoBox = document.getElementById('modalTemplate3CarPhotoBox');
+      if (!photoBox) return;
+
+      if (state.printTemplate !== 3) {
+        photoBox.classList.add('hidden');
+        return;
+      }
+
+      photoBox.classList.remove('hidden');
+      const modelInput = document.getElementById('modelSelect');
+      const curModel = formatEPower(modelInput ? modelInput.value.trim() : state.selectedModel) || 'ทั่วไป';
+      const lblEl = document.getElementById('tpl3PhotoModelLabel');
+      if (lblEl) lblEl.innerText = `(รุ่น: ${curModel})`;
+
+      const savedDataUrl = getSavedCarPhotoForCurrentModel(curModel);
+      const previewWrap = document.getElementById('tpl3CarPhotoPreviewWrap');
+      const previewImg = document.getElementById('tpl3CarPhotoPreviewImg');
+      const removeBtn = document.getElementById('tpl3RemovePhotoBtn');
+      const uploadBtnText = document.getElementById('tpl3UploadBtnText');
+
+      if (savedDataUrl) {
+        if (previewImg) previewImg.src = savedDataUrl;
+        previewWrap?.classList.remove('hidden');
+        removeBtn?.classList.remove('hidden');
+        if (uploadBtnText) uploadBtnText.innerText = 'เปลี่ยนรูปรถใหม่';
+      } else {
+        previewWrap?.classList.add('hidden');
+        removeBtn?.classList.add('hidden');
+        if (uploadBtnText) uploadBtnText.innerText = 'เลือกรูปรถ';
+      }
+    }
+
+    function handleTemplate3CarPhotoUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const modelInput = document.getElementById('modelSelect');
+      const curModel = formatEPower(modelInput ? modelInput.value.trim() : state.selectedModel) || 'DEFAULT';
+      const storageKey = getCarPhotoStorageKey(state.selectedBrand, curModel);
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // ย่อขนาดภาพให้พอดีและคมชัดระดับ HD เพื่อประหยัดพื้นที่ LocalStorage
+          const maxW = 900;
+          const scale = img.width > maxW ? (maxW / img.width) : 1;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          state.carModelPhotos[storageKey] = compressedDataUrl;
+          saveToStorage(false);
+          updateTemplate3PhotoUI();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function removeTemplate3CarPhoto() {
+      const modelInput = document.getElementById('modelSelect');
+      const curModel = formatEPower(modelInput ? modelInput.value.trim() : state.selectedModel) || 'DEFAULT';
+      const storageKey = getCarPhotoStorageKey(state.selectedBrand, curModel);
+      delete state.carModelPhotos[storageKey];
+      saveToStorage(false);
+      updateTemplate3PhotoUI();
+    }
 
     function selectPrintTemplate(tplNum) {
-      state.printTemplate = tplNum === 2 ? 2 : 1;
+      state.printTemplate = [1, 2, 3].includes(Number(tplNum)) ? Number(tplNum) : 1;
       localStorage.setItem('multi_brand_print_template', String(state.printTemplate));
 
       const btn1 = document.getElementById('btnPrintTemplate1');
       const btn2 = document.getElementById('btnPrintTemplate2');
-      if (btn1 && btn2) {
-        if (state.printTemplate === 1) {
-          btn1.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-blue-600 bg-blue-50 text-blue-800 shadow-sm transition-all flex items-center justify-center gap-1.5';
-          btn2.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5';
-        } else {
-          btn2.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-slate-900 bg-slate-900 text-white shadow-sm transition-all flex items-center justify-center gap-1.5';
-          btn1.className = 'flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5';
-        }
-      }
+      const btn3 = document.getElementById('btnPrintTemplate3');
+
+      const inactiveClass = 'flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-1';
+
+      if (btn1) btn1.className = state.printTemplate === 1
+        ? 'flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-extrabold border-2 border-blue-600 bg-blue-50 text-blue-800 shadow-sm transition-all flex items-center justify-center gap-1'
+        : inactiveClass;
+
+      if (btn2) btn2.className = state.printTemplate === 2
+        ? 'flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-extrabold border-2 border-slate-900 bg-slate-900 text-white shadow-sm transition-all flex items-center justify-center gap-1'
+        : inactiveClass;
+
+      if (btn3) btn3.className = state.printTemplate === 3
+        ? 'flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-extrabold border-2 border-amber-600 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-950 shadow-sm transition-all flex items-center justify-center gap-1'
+        : inactiveClass;
+
+      updateTemplate3PhotoUI();
+      updateModalDocPreview();
     }
 
     function onDownDiscountInput() {
@@ -4772,7 +4932,8 @@
       const docBox = document.getElementById('modalDocPreviewBox');
       if (!docBox) return;
 
-      if (state.step === 'cash') {
+      // รูปแบบที่ 3 และโหมดซื้อสด ไม่แสดงกล่องเอกสารผู้เช่าซื้อตามที่กำหนด
+      if (state.step === 'cash' || state.printTemplate === 3) {
         docBox.classList.add('hidden');
         return;
       }
@@ -4834,7 +4995,6 @@
       document.getElementById('valOtherFeeAmt').value = fmt(df.otherFeeAmt);
 
       selectPrintTemplate(state.printTemplate || 1);
-      updateModalDocPreview();
       document.getElementById('printModal').classList.remove('hidden');
     }
 
@@ -4929,7 +5089,9 @@
       return { items, netDelivery: Math.max(netDelivery, 0) };
     }
 
-    async function buildCurrentQuotationContextAndRenderPrintArea() {
+    // ==================== RENDER QUOTATION TO DOM (ใช้ร่วมกันทั้งพิมพ์ PDF และสร้างรูปภาพ PNG/JPG) ====================
+
+    async function renderQuotationToDom() {
       state.sales.name = document.getElementById('modalSalesName').value.trim();
       state.sales.phone = document.getElementById('modalSalesPhone').value.trim();
       state.sales.line = document.getElementById('modalSalesLine').value.trim();
@@ -4972,9 +5134,14 @@
         deliveryNet = getDeliveryLineItems('cash', '', finalNet).netDelivery;
       }
 
+      const savedCarPhoto = getSavedCarPhotoForCurrentModel(modelText);
+      const carHeroSrc = savedCarPhoto || buildDefaultCarHeroSvgDataUrl(brandObj.name, modelText);
+
       const ctx = {
         brandObj,
         logoSrc: resolvedLogoDataUrl,
+        carHeroSrc,
+        hasCustomCarPhoto: Boolean(savedCarPhoto),
         modelText,
         gradeText,
         colorText,
@@ -4991,7 +5158,9 @@
       };
 
       const printAreaEl = document.getElementById('printArea');
-      if (state.printTemplate === 2) {
+      if (state.printTemplate === 3) {
+        printAreaEl.innerHTML = buildQuotationTemplate3Html(ctx);
+      } else if (state.printTemplate === 2) {
         printAreaEl.innerHTML = buildQuotationTemplate2Html(ctx);
       } else {
         printAreaEl.innerHTML = buildQuotationTemplate1Html(ctx);
@@ -5000,35 +5169,45 @@
     }
 
     async function executePrint() {
-      await buildCurrentQuotationContextAndRenderPrintArea();
+      await renderQuotationToDom();
       await saveCurrentQuotationToHistory(false);
       closePrintModal();
       setTimeout(() => { window.print(); }, 250);
     }
 
     async function exportQuotationAsImage(format = 'png') {
-      if (typeof htmlToImage === 'undefined') {
+      if (typeof html2canvas === 'undefined') {
         alert('กำลังโหลดไลบรารีแปลงรูปภาพ กรุณารอสักครู่แล้วกดอีกครั้ง');
         return;
       }
-      const ctx = await buildCurrentQuotationContextAndRenderPrintArea();
-      await saveCurrentQuotationToHistory(false);
+
+      const overlay = document.getElementById('imageCaptureOverlay');
+      if (overlay) overlay.classList.remove('hidden');
 
       const printAreaEl = document.getElementById('printArea');
-      printAreaEl.classList.remove('print-only');
-      printAreaEl.classList.add('capture-render-mode');
-
       try {
-        await new Promise(r => setTimeout(r, 250));
-        const options = {
-          quality: 0.96,
-          pixelRatio: 2,
+        const ctx = await renderQuotationToDom();
+        await saveCurrentQuotationToHistory(false);
+
+        // แสดง #printArea ในโหมดความกว้างคงที่ 794px (A4 HD) อยู่ใต้ Overlay เพื่อให้ html2canvas จับภาพครบทุกพิกเซล
+        printAreaEl.classList.remove('print-only');
+        printAreaEl.classList.add('capture-render-mode');
+
+        await new Promise(r => setTimeout(r, 350));
+
+        const canvas = await html2canvas(printAreaEl, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
           backgroundColor: '#ffffff',
-          skipFonts: false
-        };
-        const dataUrl = format === 'jpg'
-          ? await htmlToImage.toJpeg(printAreaEl, options)
-          : await htmlToImage.toPng(printAreaEl, options);
+          width: 794,
+          windowWidth: 1024,
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+        const dataUrl = canvas.toDataURL(mimeType, 0.95);
 
         const safeModel = (ctx.modelText || 'CAR').replace(/[^a-zA-Z0-9ก-๙_-]/g, '_');
         const safeCust = (ctx.customerName || 'Customer').replace(/[^a-zA-Z0-9ก-๙_-]/g, '_');
@@ -5046,6 +5225,7 @@
       } finally {
         printAreaEl.classList.remove('capture-render-mode');
         printAreaEl.classList.add('print-only');
+        if (overlay) overlay.classList.add('hidden');
       }
     }
 
@@ -5581,10 +5761,327 @@
       `;
     }
 
+    // ==================== รูปแบบที่ 3: ใบเสนอราคาหรูหราพร้อมรูปรถ (ภาษาไทยทั้งหมด, ไม่มีสโลแกนบน/ล่าง, ไม่มีเอกสารผู้เช่าซื้อ) ====================
+
+    function buildQuotationTemplate3Html(ctx) {
+      const fallbackSvg = buildBrandSvgFallbackDataUrl(ctx.brandObj.name);
+
+      let mainHeadline = 'ใบเสนอราคา';
+      let modeSectionHtml = '';
+      let deliveryObj = null;
+
+      if (state.step === 'calc') {
+        mainHeadline = 'ใบเสนอราคาผ่อนชำระ';
+        const activePlans = state.plans.filter(p => p.isOpen);
+        const plansToRender = activePlans.length > 0 ? activePlans : [state.plans[0]];
+        const hasAnyBeginning = plansToRender.some(p => p.isBeginning);
+
+        const rowsHtml = plansToRender.map(p => {
+          const m = computePlanMetrics(p, ctx.finalNet);
+          const cp = state.campaigns[p.campaignIdx] || state.campaigns[0] || { finance: 'ไฟแนนซ์มาตรฐาน', campaignName: '' };
+          const finLabel = p.customFinanceText ? p.customFinanceText : cp.finance;
+          const campTitle = p.customCampaignText ? p.customCampaignText : (cp.campaignName || '');
+          return `
+            <tr class="border-b border-[#e5dec9] bg-white">
+              <td class="py-2 px-3 text-left font-bold text-slate-900 text-[10.5px]">
+                ${p.name} <span class="font-medium text-slate-600">(${finLabel}${campTitle ? ' - ' + campTitle : ''})</span>
+                ${p.isBeginning ? `<span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded text-[8.5px] font-bold">Beginning</span>` : ''}
+              </td>
+              <td class="py-2 px-2 text-center font-semibold text-slate-800">${p.term} เดือน</td>
+              <td class="py-2 px-2 text-center font-semibold text-slate-800">
+                <div>${fmt(m.down)}</div>
+                <div class="text-[9px] text-slate-500">(${p.downPct}%)</div>
+              </td>
+              <td class="py-2 px-2 text-center font-semibold text-slate-800">${fmt(m.finance)}</td>
+              <td class="py-2 px-2 text-center font-bold text-slate-800">${m.rsPct.toFixed(2)}%</td>
+              <td class="py-2 px-3 text-right font-extrabold text-slate-950 text-[13px]" style="background: linear-gradient(135deg, #f3e7c9 0%, #e5d1a1 100%);">
+                ${fmt(m.monthly)} <span class="text-[10px] font-bold">฿</span>
+              </td>
+              ${hasAnyBeginning ? `<td class="py-2 px-2 text-right font-semibold text-slate-700">${p.isBeginning ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
+            </tr>
+          `;
+        }).join('');
+
+        modeSectionHtml = `
+          <div class="mb-3">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-md bg-[#4a453c] text-[#f3e7c9] flex items-center justify-center text-[11px]">📊</span>
+              <span class="text-[11px] font-extrabold text-slate-900 tracking-wide">ตารางเปรียบเทียบแผนการผ่อนชำระ</span>
+            </div>
+            <div class="rounded-xl overflow-hidden border border-[#dfd6be] shadow-2xs">
+              <table class="w-full border-collapse text-[10px]">
+                <thead>
+                  <tr class="bg-[#ede7d5] text-slate-900 font-extrabold border-b border-[#dfd6be]">
+                    <th class="py-2 px-3 text-left">แผนการผ่อน / ไฟแนนซ์ - แคมเปญ</th>
+                    <th class="py-2 px-2 text-center">จำนวนงวด</th>
+                    <th class="py-2 px-2 text-center">เงินดาวน์</th>
+                    <th class="py-2 px-2 text-center">ยอดจัดไฟแนนซ์</th>
+                    <th class="py-2 px-2 text-center">ดอกเบี้ย</th>
+                    <th class="py-2 px-3 text-right bg-[#e2d3ae] text-slate-950">ค่างวด / เดือน</th>
+                    ${hasAnyBeginning ? `<th class="py-2 px-2 text-right">งวดแรก (Beginning)</th>` : ''}
+                  </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        const primaryPlan = plansToRender[0];
+        const pm = computePlanMetrics(primaryPlan, ctx.finalNet);
+        deliveryObj = getDeliveryLineItems(
+          'calc',
+          `เงินดาวน์ตั้งต้น (อ้างอิง${primaryPlan.name} ดาวน์ ${primaryPlan.downPct}%)`,
+          pm.down,
+          primaryPlan.isBeginning ? pm.beginningInstallment : 0,
+          primaryPlan.name
+        );
+      } else if (state.step === 'balloon') {
+        mainHeadline = 'ใบเสนอราคาผ่อนแบบบอลลูน';
+        const b = computeBalloonDetails();
+        const cp = state.campaigns[state.balloonPlan.campaignIdx] || state.campaigns[0] || { finance: 'ไฟแนนซ์มาตรฐาน', campaignName: '' };
+        const finLabel = state.balloonPlan.customFinanceText ? state.balloonPlan.customFinanceText : cp.finance;
+        const campLabel = state.balloonPlan.customCampaignText ? state.balloonPlan.customCampaignText : (cp.campaignName || '');
+
+        modeSectionHtml = `
+          <div class="mb-3">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-md bg-[#4a453c] text-[#f3e7c9] flex items-center justify-center text-[11px]">🎈</span>
+              <span class="text-[11px] font-extrabold text-slate-900 tracking-wide">ตารางแผนการผ่อนชำระแบบบอลลูน (${finLabel} ${campLabel ? '- ' + campLabel : ''})</span>
+            </div>
+            <div class="rounded-xl overflow-hidden border border-[#dfd6be] shadow-2xs">
+              <table class="w-full border-collapse text-[10px]">
+                <thead>
+                  <tr class="bg-[#ede7d5] text-slate-900 font-extrabold border-b border-[#dfd6be]">
+                    <th class="py-2 px-3 text-left">รูปแบบการคำนวณ</th>
+                    <th class="py-2 px-2 text-center">ระยะเวลา</th>
+                    <th class="py-2 px-2 text-center">เงินดาวน์ (${b.downPct}%)</th>
+                    <th class="py-2 px-2 text-center">ยอดจัดไฟแนนซ์</th>
+                    <th class="py-2 px-2 text-center">ดอกเบี้ย</th>
+                    <th class="py-2 px-3 text-right bg-[#e2d3ae] text-slate-950">ค่างวด (งวด 1-${b.n})</th>
+                    <th class="py-2 px-2.5 text-right bg-[#4a453c] text-[#f3e7c9]">บอลลูนงวดที่ 60 (${b.balloonPct}%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="border-b border-[#e5dec9] bg-white">
+                    <td class="py-2 px-3 text-left font-bold text-slate-900">แผนหลัก (${b.accessories > 0 ? 'รวมอุปกรณ์ตกแต่ง' : 'มาตรฐาน'})</td>
+                    <td class="py-2 px-2 text-center font-semibold">${b.n} เดือน</td>
+                    <td class="py-2 px-2 text-center font-semibold">${fmt(b.downMain)} ฿</td>
+                    <td class="py-2 px-2 text-center font-semibold">${fmt(b.financeMain)} ฿</td>
+                    <td class="py-2 px-2 text-center font-bold">${b.rPct.toFixed(2)}%</td>
+                    <td class="py-2 px-3 text-right font-extrabold text-slate-950 text-[12px]" style="background: linear-gradient(135deg, #f3e7c9 0%, #e5d1a1 100%);">
+                      ${b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿'}
+                    </td>
+                    <td class="py-2 px-2.5 text-right font-extrabold text-slate-900">${fmt(b.balloonAmt)} ฿</td>
+                  </tr>
+                  ${b.accessories > 0 ? `
+                    <tr class="bg-slate-50/70">
+                      <td class="py-1.5 px-3 text-left font-medium text-slate-600">เปรียบเทียบ: ไม่บวกอุปกรณ์</td>
+                      <td class="py-1.5 px-2 text-center">${b.n} เดือน</td>
+                      <td class="py-1.5 px-2 text-center">${fmt(b.downNoAcc)} ฿</td>
+                      <td class="py-1.5 px-2 text-center">${fmt(b.financeNoAcc)} ฿</td>
+                      <td class="py-1.5 px-2 text-center">${b.rPct.toFixed(2)}%</td>
+                      <td class="py-1.5 px-3 text-right font-bold text-slate-800">${b.monthlyNoAcc > 0 ? fmt(b.monthlyNoAcc) + ' ฿' : '-'}</td>
+                      <td class="py-1.5 px-2.5 text-right font-bold text-slate-800">${fmt(b.balloonAmt)} ฿</td>
+                    </tr>
+                  ` : ''}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        deliveryObj = getDeliveryLineItems('balloon', `เงินดาวน์ตั้งต้น (แผนบอลลูน ดาวน์ ${b.downPct}%)`, b.downMain);
+      } else {
+        mainHeadline = 'ใบเสนอราคาซื้อสด';
+        deliveryObj = getDeliveryLineItems('cash', 'ราคารถยนต์สุทธิรวมอุปกรณ์ตกแต่ง', ctx.finalNet);
+      }
+
+      const deliveryRowsHtml = deliveryObj.items.map(it => {
+        if (it.type === 'base') {
+          return `
+            <div class="flex justify-between items-center py-1.5 px-3 border-b border-[#ebe4d2] text-[10.5px]">
+              <span class="font-bold text-slate-800">${it.label}</span>
+              <span class="font-extrabold text-slate-900">${fmt(it.amount)} ฿</span>
+            </div>
+          `;
+        } else if (it.type === 'minus') {
+          return `
+            <div class="flex justify-between items-center py-1.5 px-3 border-b border-[#ebe4d2] text-[10.5px]">
+              <span class="font-semibold text-rose-600">${it.label}</span>
+              <span class="font-extrabold text-rose-600">-${fmt(it.amount)} ฿</span>
+            </div>
+          `;
+        }
+        return `
+          <div class="flex justify-between items-center py-1.5 px-3 border-b border-[#ebe4d2] text-[10.5px]">
+            <span class="font-medium text-slate-700">${it.label}</span>
+            <span class="font-bold text-slate-800">+${fmt(it.amount)} ฿</span>
+          </div>
+        `;
+      }).join('');
+
+      // แปลงรายการของแถมเป็น 2 คอลัมน์พร้อมเครื่องหมายติ๊กถูกสีทองหรูหราตามภาพตัวอย่าง
+      const freebiesLines = (state.sales.freebies || '')
+        .split('\n')
+        .map(line => line.replace(/^\d+[\.\)]\s*/, '').trim())
+        .filter(Boolean);
+
+      const freebiesHtml = freebiesLines.length > 0
+        ? `<div class="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-1">
+            ${freebiesLines.map(item => `
+              <div class="flex items-start gap-1.5 text-[10px] text-slate-800 font-medium leading-snug">
+                <span class="text-[#b89748] font-extrabold shrink-0">✓</span>
+                <span>${item}</span>
+              </div>
+            `).join('')}
+          </div>`
+        : `<div class="text-[10px] text-slate-500">-</div>`;
+
+      return `
+        <div class="rounded-2xl overflow-hidden border border-[#dfd6be] bg-[#fcfbf7] text-slate-900">
+          <!-- ส่วนหัวแบนเนอร์หรูหราพร้อมโลโก้ ชื่อบริษัท หัวข้อภาษาไทย และรูปรถยนต์ (ไม่มีข้อความสโลแกน) -->
+          <div class="relative p-4 pb-3 border-b border-[#e5dec9]" style="background: linear-gradient(115deg, #ffffff 0%, #f8f5ec 52%, #e8dfc8 100%);">
+            <div class="grid grid-cols-12 gap-3 items-center">
+              <div class="col-span-7 space-y-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-full bg-white p-1.5 border border-[#dfd6be] flex items-center justify-center shadow-xs shrink-0">
+                    <img src="${ctx.logoSrc}" alt="${ctx.brandObj.name}" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='${fallbackSvg}'">
+                  </div>
+                  <div class="border-l-2 border-slate-800 pl-3">
+                    <div class="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">${state.company.name}</div>
+                    <div class="text-[9px] text-slate-600 mt-0.5 leading-snug">${state.company.address}</div>
+                  </div>
+                </div>
+
+                <div class="pt-1">
+                  <h1 class="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight leading-none">${mainHeadline}</h1>
+                  <div class="text-[10.5px] text-slate-600 font-medium mt-1.5">วันที่ออกเอกสาร: <strong class="text-slate-800">${ctx.dateStr}</strong></div>
+                </div>
+              </div>
+
+              <!-- กรอบรูปรถยนต์มุมขวาบน -->
+              <div class="col-span-5">
+                <div class="w-full h-36 rounded-xl overflow-hidden border border-[#d6c9a8] bg-white shadow-sm flex items-center justify-center">
+                  <img src="${ctx.carHeroSrc}" alt="${ctx.modelText}" class="w-full h-full object-cover">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-3.5 space-y-3">
+            <!-- กล่องข้อมูลรถยนต์ & ที่ปรึกษาการขาย -->
+            <div class="grid grid-cols-2 gap-3 text-[10px]">
+              <div class="rounded-xl border border-[#dfd6be] overflow-hidden bg-white shadow-2xs">
+                <div class="px-3 py-1.5 font-extrabold text-slate-900 flex items-center gap-1.5 border-b border-[#e5dec9]" style="background: linear-gradient(90deg, #ede4cb 0%, #f7f3e6 100%);">
+                  <span>🚘</span> ข้อมูลรถยนต์
+                </div>
+                <div class="p-2.5 space-y-1">
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">แบรนด์ / รุ่น</span><span class="font-extrabold text-slate-900">: ${ctx.brandObj.name} ${ctx.modelText}</span></div>
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">เกรด / รุ่นย่อย</span><span class="font-bold text-slate-900">: ${ctx.gradeText}</span></div>
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">สีตัวถัง</span><span class="font-bold text-slate-900">: ${ctx.colorText}</span></div>
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">เสนอราคาแก่</span><span class="font-extrabold text-slate-900">: ${ctx.customerName}</span></div>
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-[#dfd6be] overflow-hidden bg-white shadow-2xs">
+                <div class="px-3 py-1.5 font-extrabold text-slate-900 flex items-center gap-1.5 border-b border-[#e5dec9]" style="background: linear-gradient(90deg, #ede4cb 0%, #f7f3e6 100%);">
+                  <span>👤</span> ที่ปรึกษาการขาย
+                </div>
+                <div class="p-2.5 space-y-1">
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">ชื่อ-นามสกุล</span><span class="font-extrabold text-slate-900">: ${state.sales.name}</span></div>
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">เบอร์โทรศัพท์</span><span class="font-bold text-slate-900">: ${state.sales.phone}</span></div>
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">LINE ID</span><span class="font-bold text-slate-900">: ${state.sales.line}</span></div>
+                  <div class="flex"><span class="text-slate-500 w-24 shrink-0">โชว์รูม / สาขา</span><span class="font-bold text-slate-900">: ${state.sales.branch}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ตารางสรุปราคารถยนต์สุทธิ -->
+            <div>
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="w-5 h-5 rounded-md bg-[#4a453c] text-[#f3e7c9] flex items-center justify-center text-[11px]">💎</span>
+                <span class="text-[11px] font-extrabold text-slate-900 tracking-wide">รายละเอียดการคำนวณราคารถยนต์สุทธิ</span>
+              </div>
+              <div class="rounded-xl overflow-hidden border border-[#dfd6be] bg-white shadow-2xs">
+                <table class="w-full border-collapse text-[10px]">
+                  <thead>
+                    <tr class="bg-[#565046] text-white font-bold">
+                      <th class="py-1.5 px-3 text-left">รายการ</th>
+                      <th class="py-1.5 px-3 text-right w-28">ราคาตั้งต้น (บาท)</th>
+                      <th class="py-1.5 px-3 text-right w-28">ส่วนลด / เพิ่มเติม</th>
+                      <th class="py-1.5 px-3 text-right w-32">ยอดรวม (บาท)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="border-b border-[#ebe4d2]">
+                      <td class="py-1.5 px-3 font-semibold text-slate-800">ราคารถยนต์</td>
+                      <td class="py-1.5 px-3 text-right font-semibold text-slate-800">${fmt(ctx.basePrice)}</td>
+                      <td class="py-1.5 px-3 text-right font-bold text-rose-600">${ctx.discount > 0 ? '-' + fmt(ctx.discount) : '-'}</td>
+                      <td class="py-1.5 px-3 text-right font-extrabold text-slate-900">${fmt(ctx.netCar)}</td>
+                    </tr>
+                    <tr class="border-b border-[#e5dec9]">
+                      <td class="py-1.5 px-3 font-semibold text-slate-800">ค่าสีพิเศษ (${fmt(ctx.colorPrice)} ฿) + อุปกรณ์ตกแต่งเพิ่มเติม (${fmt(ctx.accessories)} ฿)</td>
+                      <td class="py-1.5 px-3 text-right text-slate-400">-</td>
+                      <td class="py-1.5 px-3 text-right font-bold text-slate-800">${ctx.netAddon > 0 ? '+' + fmt(ctx.netAddon) : '0'}</td>
+                      <td class="py-1.5 px-3 text-right font-extrabold text-slate-900">${fmt(ctx.netAddon)}</td>
+                    </tr>
+                    <tr style="background: linear-gradient(90deg, #f5eedc 0%, #e5d2a4 100%);">
+                      <td colspan="3" class="py-2 px-3 text-right font-extrabold text-slate-900 text-[11px]">ราคารถยนต์สุทธิรวมตกแต่ง</td>
+                      <td class="py-2 px-3 text-right font-extrabold text-slate-950 text-[15px]">${fmt(ctx.finalNet)} <span class="text-xs">฿</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ตารางเปรียบเทียบแผนการผ่อนชำระ -->
+            ${modeSectionHtml}
+
+            <!-- ด้านล่าง 2 คอลัมน์: ซ้าย = สรุปค่าใช้จ่ายวันรับรถ | ขวา = รายการของแถมและสิทธิพิเศษ (ไม่มีเอกสารผู้เช่าซื้อและไม่มีแถบสโลแกนล่าง) -->
+            <div class="grid grid-cols-12 gap-3 items-stretch">
+              <div class="col-span-7 flex flex-col">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="w-5 h-5 rounded-md bg-[#4a453c] text-[#f3e7c9] flex items-center justify-center text-[11px]">💰</span>
+                  <span class="text-[11px] font-extrabold text-slate-900 tracking-wide">สรุปค่าใช้จ่ายวันรับรถ</span>
+                </div>
+                <div class="rounded-xl overflow-hidden border border-[#dfd6be] bg-white flex-1 flex flex-col justify-between shadow-2xs">
+                  <div>
+                    <div class="flex justify-between items-center py-1.5 px-3 bg-[#ede7d5] border-b border-[#dfd6be] text-[10px] font-extrabold text-slate-900">
+                      <span>รายการคำนวณค่าใช้จ่ายวันรับรถ</span>
+                      <span>จำนวนเงิน (บาท)</span>
+                    </div>
+                    ${deliveryRowsHtml}
+                  </div>
+                  <div class="flex justify-between items-center py-2 px-3" style="background: linear-gradient(90deg, #f5eedc 0%, #e5d2a4 100%);">
+                    <span class="font-extrabold text-slate-900 text-[11px]">สรุปยอดเงินชำระวันรับรถสุทธิ</span>
+                    <span class="font-extrabold text-slate-950 text-[15px]">${fmt(deliveryObj.netDelivery)} <span class="text-xs">฿</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-span-5 flex flex-col">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="w-5 h-5 rounded-md bg-[#4a453c] text-[#f3e7c9] flex items-center justify-center text-[11px]">🎁</span>
+                  <span class="text-[11px] font-extrabold text-slate-900 tracking-wide">รายการของแถมและสิทธิพิเศษ</span>
+                </div>
+                <div class="rounded-xl border border-[#dfd6be] bg-white p-3 flex-1 shadow-2xs">
+                  ${freebiesHtml}
+                </div>
+              </div>
+            </div>
+
+            <div class="text-[8.5px] text-slate-400 italic pt-0.5">
+              * หมายเหตุ: เอกสารฉบับนี้เป็นการประมาณการเบื้องต้น เงื่อนไขเป็นไปตามที่บริษัทฯ และสถาบันการเงินกำหนด
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     // ==================== QUOTATION HISTORY (บันทึก / ค้นหา / โหลดแก้ไขซ้ำ / ลบ) ====================
 
     async function saveCurrentQuotationToHistory(showNotify = true) {
-      const ctx = await buildCurrentQuotationContextAndRenderPrintArea();
+      const ctx = await renderQuotationToDom();
       const docNo = `QT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
       const quotId = state.loadedQuotationId || `qt_${Date.now()}`;
 
