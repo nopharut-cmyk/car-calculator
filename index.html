@@ -557,7 +557,7 @@
   <!-- พื้นที่สำหรับพิมพ์ A4 (1 หน้าพอดี ไม่มีช่องเซ็นชื่อด้านล่าง - สลับเรนเดอร์ระหว่างรูปแบบที่ 1 และ รูปแบบที่ 2 อัตโนมัติ) -->
   <div id="printArea" class="print-only text-slate-900 font-sans"></div>
 
-  <!-- ==================== [สิ้นสุดโค้ดชุดที่ 1 — นำโค้ดชุดที่ 2 มาวางต่อจากบรรทัดนี้] ==================== -->
+  <!-- ==================== [สิ้นสุดโค้ดชุดที่ 1 — พิมพ์ "ต่อชุดที่ 2" เพื่อรับโค้ดชุดถัดไป] ==================== -->
 <script>
     const API_BASE = 'https://car-finance-api.nopharut.workers.dev';
 
@@ -584,27 +584,28 @@
       }
     };
 
+    // จัดเรียงแบรนด์ตามลำดับตัวอักษรภาษาอังกฤษ A - Z และอัปเดตโลโก้ Mitsubishi ใหม่
     const BRANDS = [
-      { id: 'toyota', name: 'TOYOTA', img: 'https://img1.pic.in.th/images/Toyota.png' },
-      { id: 'honda', name: 'HONDA', img: 'https://img2.pic.in.th/Honda.png' },
-      { id: 'isuzu', name: 'ISUZU', img: 'https://img1.pic.in.th/images/Isuzu.png' },
-      { id: 'nissan', name: 'NISSAN', img: 'https://img2.pic.in.th/Nissan.png' },
-      { id: 'mitsubishi', name: 'MITSUBISHI', img: 'https://img1.pic.in.th/images/Mitsubishi.png' },
-      { id: 'ford', name: 'FORD', img: 'https://img1.pic.in.th/images/Ford.png' },
-      { id: 'mazda', name: 'MAZDA', img: 'https://img1.pic.in.th/images/Mazda.png' },
-      { id: 'suzuki', name: 'SUZUKI', img: 'https://img1.pic.in.th/images/Suzuki.png' },
-      { id: 'kia', name: 'KIA', img: 'https://img2.pic.in.th/Kia.png' },
       { id: 'byd', name: 'BYD', img: 'https://img2.pic.in.th/BYD.png' },
-      { id: 'omoda_jaecoo', name: 'OMODA & JAECOO', img: 'https://img2.pic.in.th/OJ.png' },
-      { id: 'mg', name: 'MG', img: 'https://img2.pic.in.th/MG.png' },
+      { id: 'Changan', name: 'CHANGAN', img: 'https://img1.pic.in.th/images/Changan.png' },
+      { id: 'chery', name: 'CHERY', img: 'https://img1.pic.in.th/images/Chery.png' },
+      { id: 'ford', name: 'FORD', img: 'https://img1.pic.in.th/images/Ford.png' },
       { id: 'gac_aion', name: 'GAC AION', img: 'https://img2.pic.in.th/Aion.png' },
       { id: 'geely', name: 'GEELY', img: 'https://img2.pic.in.th/Geely.png' },
-      { id: 'Changan', name: 'CHANGAN', img: 'https://img1.pic.in.th/images/Changan.png' },
       { id: 'gwm', name: 'GWM', img: 'https://img2.pic.in.th/GWM.png' },
-      { id: 'chery', name: 'CHERY', img: 'https://img1.pic.in.th/images/Chery.png' },
+      { id: 'honda', name: 'HONDA', img: 'https://img2.pic.in.th/Honda.png' },
       { id: 'icar', name: 'iCAR', img: 'https://img1.pic.in.th/images/iCAR.png' },
+      { id: 'isuzu', name: 'ISUZU', img: 'https://img1.pic.in.th/images/Isuzu.png' },
+      { id: 'kia', name: 'KIA', img: 'https://img2.pic.in.th/Kia.png' },
       { id: 'lepas', name: 'LEPAS', img: 'https://img2.pic.in.th/Lepas.png' },
-      { id: 'Tesla', name: 'TESLA', img: 'https://img1.pic.in.th/images/Tesla.png' }
+      { id: 'mazda', name: 'MAZDA', img: 'https://img1.pic.in.th/images/Mazda.png' },
+      { id: 'mg', name: 'MG', img: 'https://img2.pic.in.th/MG.png' },
+      { id: 'mitsubishi', name: 'MITSUBISHI', img: 'https://img2.pic.in.th/Mitsubishi.png' },
+      { id: 'nissan', name: 'NISSAN', img: 'https://img2.pic.in.th/Nissan.png' },
+      { id: 'omoda_jaecoo', name: 'OMODA & JAECOO', img: 'https://img2.pic.in.th/OJ.png' },
+      { id: 'suzuki', name: 'SUZUKI', img: 'https://img1.pic.in.th/images/Suzuki.png' },
+      { id: 'Tesla', name: 'TESLA', img: 'https://img1.pic.in.th/images/Tesla.png' },
+      { id: 'toyota', name: 'TOYOTA', img: 'https://img1.pic.in.th/images/Toyota.png' }
     ];
 
     let state = {
@@ -614,8 +615,11 @@
         user: null,
         showrooms: [],
         activeShowroomId: 'sr_mega_tiwanon',
-        brandDraftSelection: []
+        brandDraftSelection: [],
+        deviceId: '',
+        deviceLabel: ''
       },
+      brandLogoDataUrls: {}, // แคชโลโก้แบบ Base64 DataURL เพื่อไม่ให้ภาพเสียตอนพิมพ์และบันทึกรูป PNG/JPG
       savedQuotations: [],
       loadedQuotationId: null,
       selectedBrand: null,
@@ -630,11 +634,10 @@
       driveOffInputText: '',
       printTemplate: 1,
       pendingImportMode: 'all',
-      // สถานะโฟลเดอร์: พับปิดเริ่มต้นทั้งหมด ({}) เพื่อความเป็นระเบียบ
-      expandedFinanceFolders: {},      // ชั้นที่ 1: { [finKey]: true/false }
-      expandedCampaignSubFolders: {},  // ชั้นที่ 2: { [`${finKey}||${campKey}`]: true/false }
-      expandedCarFolders: {},          // โฟลเดอร์รุ่นรถ: { [modelKey]: true/false }
-      expandedAccFolders: {},          // โฟลเดอร์อุปกรณ์ตกแต่ง: { [modelKey]: true/false }
+      expandedFinanceFolders: {},
+      expandedCampaignSubFolders: {},
+      expandedCarFolders: {},
+      expandedAccFolders: {},
       brandProfiles: {},
       company: {
         name: 'บริษัท เมกา ออโตโมบิล ติวานนท์ จำกัด',
@@ -717,31 +720,130 @@
       return String(str || '').replace(/e-power/gi, 'e-POWER');
     }
 
-    // ==================== SMART FOLDER GROUPING KEYS (ตัดเว้นวรรคส่วนเกินรวมเข้าโฟลเดอร์เดียวกัน) ====================
+    // ==================== DEVICE IDENTIFICATION (สำหรับระบบ 1 Email / 1 เครื่อง) ====================
+
+    function initDeviceIdentity() {
+      let devId = localStorage.getItem('mb_device_id');
+      if (!devId) {
+        devId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+        localStorage.setItem('mb_device_id', devId);
+      }
+      const ua = navigator.userAgent || '';
+      let deviceType = 'คอมพิวเตอร์ (PC/Mac)';
+      if (/iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua))) {
+        deviceType = 'แท็บเล็ต (Tablet)';
+      } else if (/iPhone|iPod|Android.*Mobile|Mobile/i.test(ua)) {
+        deviceType = 'มือถือ (Mobile)';
+      }
+      state.auth.deviceId = devId;
+      state.auth.deviceLabel = deviceType;
+    }
+
+    // ==================== LOGO BASE64 PRELOADER (แก้ปัญหาภาพโลโก้ไม่ขึ้นตอนพิมพ์ & บันทึกรูป PNG/JPG) ====================
+
+    function buildBrandSvgFallbackDataUrl(brandName) {
+      const label = String(brandName || 'CAR').toUpperCase();
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+        <rect width="160" height="160" rx="24" fill="#0f172a"/>
+        <rect x="8" y="8" width="144" height="144" rx="18" fill="none" stroke="#38bdf8" stroke-width="4"/>
+        <text x="80" y="88" font-family="sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">${label}</text>
+      </svg>`;
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    async function ensureBrandLogoDataUrl(brandObj) {
+      if (!brandObj || !brandObj.img) return buildBrandSvgFallbackDataUrl(brandObj?.name || 'CAR');
+      if (state.brandLogoDataUrls[brandObj.id]) return state.brandLogoDataUrls[brandObj.id];
+
+      // ลองโหลดผ่าน fetch / Image และแปลงเป็น DataURL เพื่อหลีกเลี่ยง Cross-Origin Tainted Canvas และปัญหาพิมพ์รูปไม่ติด
+      const candidateUrls = [
+        brandObj.img,
+        `https://wsrv.nl/?url=${encodeURIComponent(brandObj.img.replace(/^https?:\/\//, ''))}&output=png`
+      ];
+
+      for (const url of candidateUrls) {
+        try {
+          const resp = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const dataUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
+              state.brandLogoDataUrls[brandObj.id] = dataUrl;
+              return dataUrl;
+            }
+          }
+        } catch (e) {
+          // ข้ามไปลอง URL ถัดไป
+        }
+      }
+
+      const fallback = buildBrandSvgFallbackDataUrl(brandObj.name);
+      state.brandLogoDataUrls[brandObj.id] = fallback;
+      return fallback;
+    }
+
+    function getResolvedBrandLogoSrc(brandObj) {
+      if (!brandObj) return buildBrandSvgFallbackDataUrl('CAR');
+      return state.brandLogoDataUrls[brandObj.id] || brandObj.img || buildBrandSvgFallbackDataUrl(brandObj.name);
+    }
+
+    // ==================== SMART FOLDER GROUPING KEYS ====================
 
     function cleanDisplaySpaces(str) {
       return String(str || '').replace(/\s+/g, ' ').trim();
     }
 
-    // คีย์จัดกลุ่มบริษัทไฟแนนซ์: ตัดช่องว่างและเครื่องหมายขีดทั้งหมด เช่น "นิสสันลิสซิ่ง" == "นิสสัน ลิสซิ่ง"
     function getFinanceFolderKey(finName) {
       const cleaned = String(finName || '').replace(/[\s\-_]+/g, '').toUpperCase();
       return cleaned || 'UNSPECIFIED_FINANCE';
     }
 
-    // คีย์จัดกลุ่มชื่อแคมเปญ: ตัดช่องว่างส่วนเกินและตัวพิมพ์ใหญ่ เช่น "GENRATE" == "Genrate "
     function getCampaignSubFolderKey(campName) {
       const cleaned = String(campName || '').replace(/\s+/g, '').toUpperCase();
       return cleaned || 'STANDARD';
     }
 
-    // คีย์จัดกลุ่มชื่อรุ่นรถ (Model): ตัดช่องว่างส่วนเกิน เช่น "MG4" == "MG 4", "KICKS" == "KICKS "
     function getModelFolderKey(modelName) {
       const cleaned = String(modelName || '').replace(/\s+/g, '').toUpperCase();
       return cleaned || 'UNSPECIFIED_MODEL';
     }
 
-    // ==================== API FETCH HELPER (BEARER TOKEN + SHOWROOM SCOPE) ====================
+    // ==================== API FETCH HELPER & SINGLE-DEVICE SESSION ENFORCEMENT ====================
+
+    let sessionHeartbeatTimer = null;
+
+    function startSingleDeviceHeartbeat() {
+      if (sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
+      sessionHeartbeatTimer = setInterval(async () => {
+        if (!state.auth.token || !state.auth.user || state.step === 'login') return;
+        // ตรวจสอบเฉพาะผู้ใช้ทั่วไป (ระดับ 1-2) ยกเว้น Super Admin (ระดับ 3)
+        if (Number(state.auth.user.roleTier) === 3) return;
+        try {
+          const res = await apiFetch('/api/auth/me');
+          if (res && res.status === 401) {
+            forceKickOutDueToOtherDevice();
+          }
+        } catch (e) {}
+      }, 15000); // เช็กสถานะทุก 15 วินาที เพื่อให้เครื่องเดิมเด้งออกทันทีเมื่อมีการล็อกอินซ้อน
+    }
+
+    function forceKickOutDueToOtherDevice() {
+      if (state.step === 'login') return;
+      state.auth.token = '';
+      state.auth.user = null;
+      state.auth.showrooms = [];
+      state.auth.brandDraftSelection = [];
+      state.selectedBrand = null;
+      state.step = 'login';
+      saveAuthSessionToLocal();
+      render();
+      alert('⚠️ บัญชีอีเมลนี้ถูกเข้าสู่ระบบจากอุปกรณ์อื่นแล้ว\nระบบจึงออกจากระบบบนอุปกรณ์นี้โดยอัตโนมัติ (จำกัด 1 เครื่องต่อ 1 บัญชี)');
+    }
 
     async function apiFetch(endpoint, options = {}) {
       const headers = { ...(options.headers || {}) };
@@ -751,10 +853,22 @@
       if (state.auth.token) {
         headers['Authorization'] = `Bearer ${state.auth.token}`;
       }
+      if (state.auth.deviceId) {
+        headers['X-Device-Id'] = state.auth.deviceId;
+      }
       const sep = endpoint.includes('?') ? '&' : '?';
       const showroomQuery = state.auth.activeShowroomId ? `${sep}showroomId=${encodeURIComponent(state.auth.activeShowroomId)}` : '';
       const fullUrl = `${API_BASE}${endpoint}${endpoint.startsWith('/api/auth/login') ? '' : showroomQuery}`;
-      return fetch(fullUrl, { ...options, headers });
+      const response = await fetch(fullUrl, { ...options, headers });
+
+      if (response.status === 401 && !endpoint.startsWith('/api/auth/login') && state.auth.token) {
+        const clone = response.clone();
+        const errData = await clone.json().catch(() => ({}));
+        if (errData.code === 'SESSION_REPLACED' || (state.auth.user && Number(state.auth.user.roleTier) !== 3)) {
+          forceKickOutDueToOtherDevice();
+        }
+      }
+      return response;
     }
 
     function saveAuthSessionToLocal() {
@@ -770,6 +884,7 @@
     }
 
     function loadAuthSessionFromLocal() {
+      initDeviceIdentity();
       try {
         const tok = localStorage.getItem('mb_auth_token');
         const usrRaw = localStorage.getItem('mb_auth_user');
@@ -782,6 +897,7 @@
             ? state.auth.user.allowedBrands.filter(b => b !== 'ALL')
             : [];
           state.step = 'brand';
+          startSingleDeviceHeartbeat();
         }
       } catch (e) {
         console.warn('Session parse error:', e);
@@ -1097,7 +1213,6 @@
       try {
         const meRes = await apiFetch('/api/auth/me').catch(() => null);
         if (meRes && meRes.status === 401) {
-          handleLogout(true);
           return;
         }
         if (meRes && meRes.ok) {
@@ -1199,7 +1314,7 @@
       }
     }
 
-    // ==================== LOGIN, LOGOUT & 3-TIER BRAND SELECTION ====================
+    // ==================== LOGIN, LOGOUT & 1-DEVICE-PER-EMAIL ENFORCEMENT ====================
 
     function renderLoginPage() {
       return `
@@ -1213,7 +1328,7 @@
               <p class="text-xs text-slate-400">เข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับจากแอดมินโชว์รูม</p>
             </div>
 
-            <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+            <form onsubmit="handleLoginSubmit(event, false)" class="space-y-4">
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1.5">อีเมลผู้ใช้งาน (Email)</label>
                 <input type="email" id="loginEmailInput" required placeholder="name@company.co.th" class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm font-semibold text-white outline-none transition-all">
@@ -1233,16 +1348,17 @@
 
             <div class="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1">
               <div class="font-bold text-slate-300">สิทธิ์การใช้งาน 3 ระดับ:</div>
-              <div>• <strong>ระดับ 1:</strong> เลือกใช้งานได้ 1 แบรนด์ | <strong>ระดับ 2:</strong> เลือกใช้งานได้ 3 แบรนด์</div>
-              <div>• <strong>ระดับ 3 (Super Admin):</strong> ใช้งานได้ทุกแบรนด์ และจัดการสิทธิ์/โชว์รูมได้ตลอดเวลา</div>
+              <div>• <strong>ระดับ 1:</strong> เลือกใช้งานได้ 1 แบรนด์ | <strong>ระดับ 2:</strong> เลือกใช้งานได้ 3 แบรนด์ (จำกัด 1 เครื่องต่อ 1 อีเมล)</div>
+              <div>• <strong>ระดับ 3 (Super Admin):</strong> ใช้งานได้ทุกแบรนด์ ทุกอุปกรณ์ และจัดการสิทธิ์/โชว์รูมได้ตลอดเวลา</div>
             </div>
           </div>
         </div>
       `;
     }
 
-    async function handleLoginSubmit(e) {
-      e.preventDefault();
+    async function handleLoginSubmit(e, forceReplace = false) {
+      if (e) e.preventDefault();
+      initDeviceIdentity();
       const email = document.getElementById('loginEmailInput')?.value.trim();
       const password = document.getElementById('loginPasswordInput')?.value;
       const errBox = document.getElementById('loginErrorMsg');
@@ -1258,9 +1374,24 @@
       try {
         const res = await apiFetch('/api/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({
+            email,
+            password,
+            deviceId: state.auth.deviceId,
+            deviceLabel: state.auth.deviceLabel,
+            forceReplace
+          })
         });
         const data = await res.json();
+
+        // กรณีผู้ใช้ทั่วไป (ระดับ 1-2) มีการล็อกอินค้างอยู่บนอุปกรณ์อื่น (409 DEVICE_CONFLICT)
+        if (res.status === 409 && data.code === 'DEVICE_CONFLICT') {
+          const confirmMsg = "บัญชีอีเมลนี้กำลังใช้งานอยู่บนอุปกรณ์อื่น หากเข้าสู่ระบบบนอุปกรณ์นี้ ระบบจะออกจากระบบบนอุปกรณ์เดิมทันที กด 'ตกลง' เพื่อเข้าสู่ระบบ หรือ 'ยกเลิก'";
+          if (confirm(confirmMsg)) {
+            return await handleLoginSubmit(null, true);
+          }
+          return;
+        }
 
         if (!res.ok) {
           if (errBox) {
@@ -1277,11 +1408,12 @@
           ? data.user.allowedBrands.filter(b => b !== 'ALL')
           : [];
         saveAuthSessionToLocal();
+        startSingleDeviceHeartbeat();
 
         await syncFromCloud();
 
         if (data.user.roleTier === 1 && !data.user.canChangeBrand && data.user.allowedBrands?.length === 1) {
-          selectBrand(data.user.allowedBrands[0]);
+          await selectBrand(data.user.allowedBrands[0]);
         } else {
           state.step = 'brand';
           render();
@@ -1301,6 +1433,7 @@
 
     function handleLogout(silent = false) {
       if (!silent && !confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+      if (sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
       state.auth.token = '';
       state.auth.user = null;
       state.auth.showrooms = [];
@@ -1376,12 +1509,12 @@
         }
         state.auth.user = data.user;
         saveAuthSessionToLocal();
-        selectBrand(chosen[0]);
+        await selectBrand(chosen[0]);
       } catch (err) {
         state.auth.user.allowedBrands = [...chosen];
         state.auth.user.canChangeBrand = false;
         saveAuthSessionToLocal();
-        selectBrand(chosen[0]);
+        await selectBrand(chosen[0]);
       }
     }
 
@@ -1460,7 +1593,7 @@
                   🔒 แบรนด์ถูกล็อกตามสิทธิ์ระดับ ${tier} (${lockedBrands.map(id => BRANDS.find(b => b.id === id)?.name || id).join(', ')}) — หากต้องการเปลี่ยนแบรนด์กรุณาแจ้งแอดมินเปิดสิทธิ์ให้ใหม่
                 </p>
               ` : `
-                <p class="text-slate-400 text-xs mt-2">สิทธิ์ Super Admin (ระดับ 3): เลือกใช้งานและตั้งค่าได้ทุกแบรนด์และทุกโชว์รูม</p>
+                <p class="text-slate-400 text-xs mt-2">สิทธิ์ Super Admin (ระดับ 3): เลือกใช้งานและตั้งค่าได้ทุกแบรนด์และทุกโชว์รูม (เรียงตามตัวอักษร A–Z)</p>
               `)}
             </div>
 
@@ -1469,6 +1602,7 @@
                 const count = state.cars.filter(c => c.brand === b.id).length;
                 const isAllowed = isSuperAdmin || lockedBrands.includes('ALL') || lockedBrands.includes(b.id);
                 const isDraftPicked = canChoose && draftBrands.includes(b.id);
+                const fallbackSvg = buildBrandSvgFallbackDataUrl(b.name);
 
                 if (canChoose) {
                   return `
@@ -1476,7 +1610,7 @@
                       ${isDraftPicked ? `<span class="absolute top-2.5 left-2.5 px-2 py-0.5 text-[10px] font-extrabold bg-emerald-500 text-slate-950 rounded-full">✓ เลือกแล้ว</span>` : ''}
                       ${count > 0 ? `<span class="absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">${count} รุ่น</span>` : ''}
                       <div class="w-12 h-12 sm:w-14 sm:h-14 mb-3 flex items-center justify-center bg-white/95 rounded-2xl p-2.5 shadow-inner">
-                        <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.src='https://placehold.co/80x80/1e293b/ffffff?text=${b.name.charAt(0)}'">
+                        <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='${fallbackSvg}'">
                       </div>
                       <span class="font-bold text-xs text-white tracking-wider">${b.name}</span>
                     </button>
@@ -1488,7 +1622,7 @@
                     ${!isAllowed ? `<span class="absolute top-2.5 left-2.5 text-xs" title="ล็อกตามสิทธิ์ระดับ ${tier}">🔒</span>` : ''}
                     ${count > 0 ? `<span class="absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">${count} รุ่น</span>` : ''}
                     <div class="w-12 h-12 sm:w-14 sm:h-14 mb-3 flex items-center justify-center bg-white/95 rounded-2xl p-2.5 shadow-inner ${isAllowed ? 'group-hover:scale-105 transition-transform' : ''}">
-                      <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.src='https://placehold.co/80x80/1e293b/ffffff?text=${b.name.charAt(0)}'">
+                      <img src="${b.img}" alt="${b.name}" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='${fallbackSvg}'">
                     </div>
                     <span class="font-bold text-xs text-slate-200 ${isAllowed ? 'group-hover:text-white' : ''} tracking-wider">${b.name}</span>
                   </button>
@@ -1503,8 +1637,7 @@
         </div>
       `;
     }
-
-    // ==================== DYNAMIC AVAILABLE TERMS & COMM YEARS PER CAMPAIGN ====================
+// ==================== DYNAMIC AVAILABLE TERMS & COMM YEARS PER CAMPAIGN ====================
 
     function getAvailableMonthsForCampaign(campaignIdx) {
       const cp = state.campaigns[campaignIdx];
@@ -1625,7 +1758,8 @@
     // ==================== HEADER & SHARED VEHICLE FORM (COMBO BOXES) ====================
 
     function renderTopHeader() {
-      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR', img: '' };
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR', img: '' };
+      const fallbackSvg = buildBrandSvgFallbackDataUrl(brandObj.name);
       const usr = state.auth.user || { fullName: '', roleTier: 1 };
       const isSuperAdmin = Number(usr.roleTier) === 3;
       const navItems = [
@@ -1639,7 +1773,7 @@
           <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap justify-between items-center gap-2">
             <div class="flex items-center space-x-3">
               <div class="w-10 h-10 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-sm">
-                <img src="${brandObj.img}" alt="${brandObj.name}" class="max-h-full max-w-full object-contain">
+                <img src="${getResolvedBrandLogoSrc(brandObj)}" alt="${brandObj.name}" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='${fallbackSvg}'">
               </div>
               <div>
                 <h1 class="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
@@ -1847,8 +1981,7 @@
       `;
     }
 
-    // ==================== [สิ้นสุดโค้ดชุดที่ 2 — นำโค้ดชุดที่ 3 มาวางต่อจากบรรทัดนี้] ====================
-// ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน) ====================
+    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน) ====================
 
     function renderCalculator() {
       const cardColors = [
@@ -2361,7 +2494,6 @@
       const easyCol2 = editingCamp && editingCamp.easyCommCol2 !== undefined ? editingCamp.easyCommCol2 : 16;
 
       // 1. จัดกลุ่มแคมเปญไฟแนนซ์แบบ 2 ชั้น (ชั้นที่ 1: บริษัทไฟแนนซ์ -> ชั้นที่ 2: ชื่อแคมเปญ)
-      // ใช้ getFinanceFolderKey และ getCampaignSubFolderKey ตัดเว้นวรรคส่วนเกินเพื่อรวมเข้าโฟลเดอร์เดียวกันอัตโนมัติ
       const financeFoldersMap = {};
       brandCampaignsIndexed.forEach(({ cp, idx }) => {
         const finKey = getFinanceFolderKey(cp.finance);
@@ -2386,7 +2518,7 @@
         financeFoldersMap[finKey].subCampaigns[campKey].items.push({ cp, idx });
       });
 
-      // 2. จัดกลุ่มรุ่นรถตามชื่อ Model เป็นโฟลเดอร์ (ตัดเว้นวรรคส่วนเกินรวมเข้าโฟลเดอร์เดียวกันอัตโนมัติ)
+      // 2. จัดกลุ่มรุ่นรถตามชื่อ Model เป็นโฟลเดอร์
       const carFoldersMap = {};
       carsForBrand.forEach(car => {
         const mKey = getModelFolderKey(car.model);
@@ -3063,8 +3195,6 @@
         </div>
       `;
     }
-
-    // ==================== [สิ้นสุดโค้ดชุดที่ 3 — นำโค้ดชุดที่ 4 มาวางต่อจากบรรทัดนี้] ====================
 // ==================== CORE LOGIC, MG TYPE RESOLUTION & FORMULAS ====================
 
     function getAccessoriesForCurrentModel() {
@@ -3186,7 +3316,7 @@
       syncCurrentCarDefaultsToMargin(true);
     }
 
-    function selectBrand(brandId) {
+    async function selectBrand(brandId) {
       const usr = state.auth.user;
       if (usr && Number(usr.roleTier) !== 3) {
         const allowed = Array.isArray(usr.allowedBrands) ? usr.allowedBrands : [];
@@ -3203,6 +3333,16 @@
       state.selectedCarId = null;
       initBrandSelectionDefaults();
       render();
+
+      // โหลดโลโก้แบรนด์แบบ Base64 DataURL ล่วงหน้าเพื่อให้หัวกระดาษพิมพ์และบันทึกรูป PNG/JPG ไม่เสียแน่นอน
+      const brandObj = BRANDS.find(b => b.id === brandId);
+      if (brandObj) {
+        ensureBrandLogoDataUrl(brandObj).then(() => {
+          if (state.selectedBrand === brandId && state.step !== 'brand' && state.step !== 'login') {
+            render();
+          }
+        });
+      }
     }
 
     function onModelTextInput(val) {
@@ -4589,8 +4729,6 @@
       updateBlackSummaryBoxDOM();
       document.getElementById('marginModal').classList.add('hidden');
     }
-
-    // ==================== [สิ้นสุดโค้ดชุดที่ 4 — นำโค้ดชุดที่ 5 มาวางต่อจากบรรทัดนี้] ====================
 // ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1 & 2) & EXPORT PNG/JPG ====================
 
     function selectPrintTemplate(tplNum) {
@@ -4648,6 +4786,9 @@
 
     function openPrintModal() {
       syncMarginToDeliveryFees();
+
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand);
+      if (brandObj) ensureBrandLogoDataUrl(brandObj);
 
       document.getElementById('modalSalesName').value = state.sales.name;
       document.getElementById('modalSalesPhone').value = state.sales.phone;
@@ -4788,7 +4929,7 @@
       return { items, netDelivery: Math.max(netDelivery, 0) };
     }
 
-    function buildCurrentQuotationContextAndRenderPrintArea() {
+    async function buildCurrentQuotationContextAndRenderPrintArea() {
       state.sales.name = document.getElementById('modalSalesName').value.trim();
       state.sales.phone = document.getElementById('modalSalesPhone').value.trim();
       state.sales.line = document.getElementById('modalSalesLine').value.trim();
@@ -4797,7 +4938,9 @@
       readDeliveryFeesFromModal();
       saveToStorage();
 
-      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR', img: '' };
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR', img: '' };
+      const resolvedLogoDataUrl = await ensureBrandLogoDataUrl(brandObj);
+
       const modelInput = document.getElementById('modelSelect');
       const gradeInput = document.getElementById('gradeSelect');
       const colorInput = document.getElementById('colorSelect');
@@ -4831,6 +4974,7 @@
 
       const ctx = {
         brandObj,
+        logoSrc: resolvedLogoDataUrl,
         modelText,
         gradeText,
         colorText,
@@ -4855,9 +4999,9 @@
       return ctx;
     }
 
-    function executePrint() {
-      buildCurrentQuotationContextAndRenderPrintArea();
-      saveCurrentQuotationToHistory(false);
+    async function executePrint() {
+      await buildCurrentQuotationContextAndRenderPrintArea();
+      await saveCurrentQuotationToHistory(false);
       closePrintModal();
       setTimeout(() => { window.print(); }, 250);
     }
@@ -4867,20 +5011,20 @@
         alert('กำลังโหลดไลบรารีแปลงรูปภาพ กรุณารอสักครู่แล้วกดอีกครั้ง');
         return;
       }
-      const ctx = buildCurrentQuotationContextAndRenderPrintArea();
-      saveCurrentQuotationToHistory(false);
+      const ctx = await buildCurrentQuotationContextAndRenderPrintArea();
+      await saveCurrentQuotationToHistory(false);
 
       const printAreaEl = document.getElementById('printArea');
       printAreaEl.classList.remove('print-only');
       printAreaEl.classList.add('capture-render-mode');
 
       try {
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 250));
         const options = {
           quality: 0.96,
           pixelRatio: 2,
           backgroundColor: '#ffffff',
-          cacheBust: true
+          skipFonts: false
         };
         const dataUrl = format === 'jpg'
           ? await htmlToImage.toJpeg(printAreaEl, options)
@@ -4898,18 +5042,19 @@
         document.body.removeChild(link);
       } catch (err) {
         console.error('Export Image Error:', err);
-        alert('❌ ไม่สามารถสร้างไฟล์รูปภาพได้ (อาจเกิดจากโลโก้ข้ามโดเมน) แนะนำให้กดปุ่ม "พิมพ์ / บันทึก PDF (A4)" แทนครับ');
+        alert('❌ ไม่สามารถสร้างไฟล์รูปภาพได้ กรุณาลองอีกครั้งหรือใช้ปุ่ม "พิมพ์ / บันทึก PDF (A4)"');
       } finally {
         printAreaEl.classList.remove('capture-render-mode');
         printAreaEl.classList.add('print-only');
       }
     }
 
-    // ==================== รูปแบบที่ 1: ใบเสนอราคามาตรฐาน ====================
+    // ==================== รูปแบบที่ 1: ใบเสนอราคามาตรฐาน (1 หน้า A4 ไม่มีช่องเซ็นชื่อ) ====================
 
     function buildQuotationTemplate1Html(ctx) {
       const cType = state.deliveryFees.customerType || 'individual';
       const docInfo = CUSTOMER_DOC_TEXTS[cType];
+      const fallbackSvg = buildBrandSvgFallbackDataUrl(ctx.brandObj.name);
 
       let docBadgeText = 'ใบเสนอราคา / QUOTATION';
       let modeSectionHtml = '';
@@ -5046,7 +5191,9 @@
       return `
         <div class="flex justify-between items-start border-b-2 border-slate-900 pb-2 mb-2.5">
           <div class="flex items-center gap-3">
-            <img src="${ctx.brandObj.img}" crossorigin="anonymous" alt="Brand" class="w-11 h-11 object-contain p-1 border border-slate-200 rounded-xl bg-slate-50">
+            <div class="w-12 h-12 flex items-center justify-center p-1 border border-slate-200 rounded-xl bg-white shrink-0">
+              <img src="${ctx.logoSrc}" alt="${ctx.brandObj.name}" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='${fallbackSvg}'">
+            </div>
             <div>
               <h1 class="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">${state.company.name}</h1>
               <p class="text-slate-600 text-[9.5px] mt-0.5 max-w-md leading-snug">${state.company.address}</p>
@@ -5172,11 +5319,12 @@
       `;
     }
 
-    // ==================== รูปแบบที่ 2: ใบเสนอราคาทางการ สไตล์บริษัทใหญ่ หรูหรา มินิมอล พรีเมียม ====================
+    // ==================== รูปแบบที่ 2: ใบเสนอราคาทางการ พรีเมียม (1 หน้า A4 ไม่มีช่องเซ็นชื่อ) ====================
 
     function buildQuotationTemplate2Html(ctx) {
       const cType = state.deliveryFees.customerType || 'individual';
       const docInfo = CUSTOMER_DOC_TEXTS[cType];
+      const fallbackSvg = buildBrandSvgFallbackDataUrl(ctx.brandObj.name);
       const docNo = `QT-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(Math.floor(100 + Math.random() * 900))}`;
 
       let docTypeSubtitle = 'OFFICIAL AUTOMOTIVE QUOTATION';
@@ -5328,8 +5476,8 @@
       return `
         <div class="bg-slate-900 text-white rounded-2xl p-3.5 mb-2.5 flex justify-between items-center border-b-4 border-amber-500">
           <div class="flex items-center gap-3">
-            <div class="w-12 h-12 rounded-xl bg-white p-1.5 flex items-center justify-center shadow-sm">
-              <img src="${ctx.brandObj.img}" crossorigin="anonymous" alt="Brand" class="max-h-full max-w-full object-contain">
+            <div class="w-12 h-12 rounded-xl bg-white p-1.5 flex items-center justify-center shadow-sm shrink-0">
+              <img src="${ctx.logoSrc}" alt="${ctx.brandObj.name}" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='${fallbackSvg}'">
             </div>
             <div>
               <div class="text-[8.5px] font-bold tracking-widest text-amber-400 uppercase">${ctx.brandObj.name} AUTHORIZED DEALER</div>
@@ -5436,7 +5584,7 @@
     // ==================== QUOTATION HISTORY (บันทึก / ค้นหา / โหลดแก้ไขซ้ำ / ลบ) ====================
 
     async function saveCurrentQuotationToHistory(showNotify = true) {
-      const ctx = buildCurrentQuotationContextAndRenderPrintArea();
+      const ctx = await buildCurrentQuotationContextAndRenderPrintArea();
       const docNo = `QT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
       const quotId = state.loadedQuotationId || `qt_${Date.now()}`;
 
@@ -5622,6 +5770,9 @@
       if (p.sales) state.sales = p.sales;
       state.step = p.step || item.calc_mode || 'calc';
 
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand);
+      if (brandObj) ensureBrandLogoDataUrl(brandObj);
+
       closeHistoryModal();
       render();
       if (document.getElementById('modalCustomerName') && p.customerName) {
@@ -5698,8 +5849,8 @@
             <input type="text" id="admNewPass" required placeholder="รหัสผ่านเริ่มต้น" class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
 
             <select id="admNewTier" class="sm:col-span-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-2.5 font-bold outline-none">
-              <option value="1">ระดับ 1 (เลือกได้ 1 แบรนด์)</option>
-              <option value="2">ระดับ 2 (เลือกได้ 3 แบรนด์)</option>
+              <option value="1">ระดับ 1 (เลือกได้ 1 แบรนด์ • 1 เครื่อง)</option>
+              <option value="2">ระดับ 2 (เลือกได้ 3 แบรนด์ • 1 เครื่อง)</option>
               <option value="3">ระดับ 3 (Super Admin ทุกแบรนด์)</option>
             </select>
             <select id="admNewShowroom" class="sm:col-span-2 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl p-2.5 font-bold outline-none">
@@ -6244,79 +6395,111 @@
 
       const brandId = state.selectedBrand || 'nissan';
       const brandObj = BRANDS.find(b => b.id === brandId) || { name: brandId.toUpperCase() };
-      const reader = new FileReader();
+      const mode = state.pendingImportMode || 'all';
 
-      reader.onload = async e => {
+      const reader = new FileReader();
+      reader.onload = async function(e) {
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
 
-          let summaryLines = [];
-          let bulkCars = [];
-          let bulkAccs = [];
-          let bulkCamps = [];
+          let carStat = { updatedCount: 0, addedCount: 0, touchedItems: [] };
+          let accStat = { updatedCount: 0, addedCount: 0, touchedItems: [] };
+          let campStat = { updatedCount: 0, addedCount: 0, touchedItems: [] };
 
           workbook.SheetNames.forEach(sheetName => {
             const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
             if (!rows || rows.length === 0) return;
 
-            const sLower = sheetName.toLowerCase();
-            const firstRowKeys = Object.keys(rows[0]).join(' ').toLowerCase();
+            const lowName = sheetName.toLowerCase();
+            const firstKeys = Object.keys(rows[0]).join(' ').toLowerCase();
 
-            if (sLower.includes('car') || firstRowKeys.includes('mg_normal') || firstRowKeys.includes('ราคารถตั้งต้น')) {
+            if ((mode === 'all' || mode === 'cars') && (lowName.includes('car') || firstKeys.includes('เกรด') || firstKeys.includes('mg_normal'))) {
               const res = upsertCarsFromSheetRows(rows, brandId);
-              if (res.updatedCount > 0 || res.addedCount > 0) {
-                summaryLines.push(`🚗 รุ่นรถและสีตัวถัง: อัปเดตทับ ${res.updatedCount} รายการ | เพิ่มใหม่ ${res.addedCount} รายการ`);
-                bulkCars.push(...res.touchedItems);
-              }
-            } else if (sLower.includes('acc') || firstRowKeys.includes('accessory_name') || firstRowKeys.includes('ชื่ออุปกรณ์')) {
+              carStat.updatedCount += res.updatedCount;
+              carStat.addedCount += res.addedCount;
+              carStat.touchedItems.push(...res.touchedItems);
+            } else if ((mode === 'all' || mode === 'accessories') && (lowName.includes('acc') || firstKeys.includes('อุปกรณ์') || firstKeys.includes('accessory_name'))) {
               const res = upsertAccessoriesFromSheetRows(rows, brandId);
-              if (res.updatedCount > 0 || res.addedCount > 0) {
-                summaryLines.push(`🎁 อุปกรณ์ตกแต่ง: อัปเดตทับ ${res.updatedCount} รายการ | เพิ่มใหม่ ${res.addedCount} รายการ`);
-                bulkAccs.push(...res.touchedItems);
-              }
-            } else if (sLower.includes('camp') || firstRowKeys.includes('down_tier') || firstRowKeys.includes('บริษัทไฟแนนซ์')) {
+              accStat.updatedCount += res.updatedCount;
+              accStat.addedCount += res.addedCount;
+              accStat.touchedItems.push(...res.touchedItems);
+            } else if ((mode === 'all' || mode === 'campaigns') && (lowName.includes('camp') || firstKeys.includes('ไฟแนนซ์') || firstKeys.includes('down_tier'))) {
               const res = upsertCampaignsFromSheetRows(rows, brandId);
-              if (res.updatedCount > 0 || res.addedCount > 0) {
-                summaryLines.push(`🏦 แคมเปญและตารางดอกเบี้ย: อัปเดตทับ ${res.updatedCount} แคมเปญ | เพิ่มใหม่ ${res.addedCount} แคมเปญ`);
-                bulkCamps.push(...res.touchedItems);
-              }
+              campStat.updatedCount += res.updatedCount;
+              campStat.addedCount += res.addedCount;
+              campStat.touchedItems.push(...res.touchedItems);
             }
           });
 
-          if (summaryLines.length === 0) {
-            alert('⚠️ ไม่พบข้อมูลที่ตรงกับโครงสร้างตาราง กรุณากดปุ่ม "📤 ส่งออกไฟล์ต้นแบบ" เพื่อดูหัวคอลัมน์มาตรฐาน');
-            return;
-          }
-
-          ensureValidTermsForPlans();
           saveToStorage(false);
-          render();
 
           if (state.auth.token) {
-            const srId = state.auth.activeShowroomId;
-            if (bulkCars.length > 0) {
-              apiFetch('/api/cars/bulk', { method: 'POST', body: JSON.stringify({ showroomId: srId, items: bulkCars }) }).catch(() => null);
+            for (const c of carStat.touchedItems) {
+              await apiFetch('/api/cars', { method: 'POST', body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...c }) }).catch(() => null);
             }
-            if (bulkAccs.length > 0) {
-              apiFetch('/api/accessories/bulk', { method: 'POST', body: JSON.stringify({ showroomId: srId, items: bulkAccs }) }).catch(() => null);
+            for (const a of accStat.touchedItems) {
+              await apiFetch('/api/accessories', { method: 'POST', body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...a }) }).catch(() => null);
             }
-            if (bulkCamps.length > 0) {
-              apiFetch('/api/campaigns/bulk', { method: 'POST', body: JSON.stringify({ showroomId: srId, items: bulkCamps }) }).catch(() => null);
+            for (const cp of campStat.touchedItems) {
+              await apiFetch('/api/campaigns', { method: 'POST', body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...cp }) }).catch(() => null);
             }
           }
 
-          alert(`✅ นำเข้าและจัดกลุ่มโฟลเดอร์แบรนด์ ${brandObj.name} สำเร็จ (พร้อมซิงค์ขึ้น Cloud D1)!\n\n` + summaryLines.join('\n'));
+          render();
+          alert(
+            `✅ นำเข้าและอัปเดตข้อมูลแบรนด์ ${brandObj.name} สำเร็จ!\n\n` +
+            `• รุ่นรถ (Cars): เพิ่มใหม่ ${carStat.addedCount} | อัปเดต ${carStat.updatedCount}\n` +
+            `• อุปกรณ์ตกแต่ง (Accessories): เพิ่มใหม่ ${accStat.addedCount} | อัปเดต ${accStat.updatedCount}\n` +
+            `• ตารางดอกเบี้ย (Campaigns): เพิ่มใหม่ ${campStat.addedCount} | อัปเดต ${campStat.updatedCount}`
+          );
         } catch (err) {
           console.error('Excel Import Error:', err);
-          alert('❌ เกิดข้อผิดพลาดในการอ่านไฟล์ Excel/CSV กรุณาตรวจสอบรูปแบบไฟล์');
+          alert('❌ เกิดข้อผิดพลาดในการอ่านไฟล์ Excel/CSV กรุณาตรวจสอบรูปแบบคอลัมน์จากไฟล์ต้นแบบ');
         }
       };
-
       reader.readAsArrayBuffer(file);
     }
 
-    // ==================== NESTED FINANCE FOLDERS (2 ชั้น) & SETTINGS FUNCTIONS ====================
+    // ==================== SETTINGS CRUD & FOLDER TOGGLES ====================
+
+    function saveCompanyAndSales() {
+      state.company.name = document.getElementById('settingCompanyName')?.value.trim() || state.company.name;
+      state.company.address = document.getElementById('settingCompanyAddress')?.value.trim() || state.company.address;
+      state.sales.name = document.getElementById('settingSalesName')?.value.trim() || state.sales.name;
+      state.sales.phone = document.getElementById('settingSalesPhone')?.value.trim() || state.sales.phone;
+      state.sales.line = document.getElementById('settingSalesLine')?.value.trim() || state.sales.line;
+      state.sales.branch = document.getElementById('settingSalesBranch')?.value.trim() || state.sales.branch;
+      saveToStorage(true);
+      alert('✅ บันทึกข้อมูลบริษัทและที่ปรึกษาการขายเรียบร้อยแล้ว!');
+    }
+
+    function toggleEasyPaySettingBox(checked) {
+      const box = document.getElementById('settingEasyPayBalloonBox');
+      const stdWrap = document.getElementById('standardMatrixWrapper');
+      const easyWrap = document.getElementById('easyPayMatrixWrapper');
+      if (checked) {
+        box?.classList.remove('hidden');
+        box?.classList.add('flex');
+        stdWrap?.classList.add('hidden');
+        easyWrap?.classList.remove('hidden');
+        syncEasyPayCommHeaders();
+      } else {
+        box?.classList.add('hidden');
+        box?.classList.remove('flex');
+        stdWrap?.classList.remove('hidden');
+        easyWrap?.classList.add('hidden');
+      }
+    }
+
+    function syncEasyPayCommHeaders() {
+      const c1 = num(document.getElementById('easyCommCol1Input')?.value || 8);
+      const c2 = num(document.getElementById('easyCommCol2Input')?.value || 16);
+      const optInp = document.getElementById('campaignCommOptionsInput');
+      if (optInp) {
+        optInp.value = `${c1}%, ${c2}%`;
+      }
+    }
 
     function toggleFinanceFolder(finKey) {
       state.expandedFinanceFolders[finKey] = !state.expandedFinanceFolders[finKey];
@@ -6324,283 +6507,111 @@
     }
 
     function toggleCampaignSubFolder(finKey, campKey) {
-      const subStateKey = `${finKey}||${campKey}`;
-      state.expandedCampaignSubFolders[subStateKey] = !state.expandedCampaignSubFolders[subStateKey];
+      const key = `${finKey}||${campKey}`;
+      state.expandedCampaignSubFolders[key] = !state.expandedCampaignSubFolders[key];
       render();
     }
 
     function quickFillFinanceCampaignForm(finKey, campKey = '') {
-      state.editingCampaignIndex = null;
-      state.expandedFinanceFolders[finKey] = true;
-      if (campKey) {
-        state.expandedCampaignSubFolders[`${finKey}||${campKey}`] = true;
-      }
-
-      const matchedCamp = state.campaigns.find(cp =>
-        getFinanceFolderKey(cp.finance) === finKey &&
-        (!campKey || getCampaignSubFolderKey(cp.campaignName || cp.name) === campKey)
+      const matched = state.campaigns.find(c =>
+        getFinanceFolderKey(c.finance) === finKey &&
+        (!campKey || getCampaignSubFolderKey(c.campaignName || c.name) === campKey)
       );
-
+      state.editingCampaignIndex = null;
       render();
-
-      const finInp = document.getElementById('financeCompanyInput');
-      const campInp = document.getElementById('campaignTitleInput');
-      const modelInp = document.getElementById('campaignCarModelInput');
-
-      if (finInp && matchedCamp) finInp.value = matchedCamp.finance;
-      if (campInp) campInp.value = campKey && matchedCamp ? (matchedCamp.campaignName || '') : '';
-      document.getElementById('campaignFormSection')?.scrollIntoView({ behavior: 'smooth' });
-      if (campKey && modelInp) modelInp.focus();
-      else if (campInp) campInp.focus();
-    }
-
-    function toggleEasyPaySettingBox(checked) {
-      const box = document.getElementById('settingEasyPayBalloonBox');
-      const stdWrap = document.getElementById('standardMatrixWrapper');
-      const easyWrap = document.getElementById('easyPayMatrixWrapper');
-      if (box) {
-        if (checked) {
-          box.classList.remove('hidden');
-          box.classList.add('flex');
-        } else {
-          box.classList.add('hidden');
-          box.classList.remove('flex');
-        }
-      }
-      if (stdWrap && easyWrap) {
-        if (checked) {
-          stdWrap.classList.add('hidden');
-          easyWrap.classList.remove('hidden');
-          syncEasyPayCommHeaders();
-        } else {
-          stdWrap.classList.remove('hidden');
-          easyWrap.classList.add('hidden');
-        }
-      }
-    }
-
-    function syncEasyPayCommHeaders() {
-      const c1 = num(document.getElementById('easyCommCol1Input')?.value ?? 8);
-      const c2 = num(document.getElementById('easyCommCol2Input')?.value ?? 16);
-      const comPctInput = document.getElementById('campaignComPctInput');
-      const optsInput = document.getElementById('campaignCommOptionsInput');
-      if (comPctInput) comPctInput.value = c1;
-      if (optsInput) optsInput.value = `${c1}%, ${c2}%`;
-    }
-
-    function saveCompanyAndSales() {
-      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'แบรนด์นี้' };
-      state.company.name = document.getElementById('settingCompanyName').value.trim();
-      state.company.address = document.getElementById('settingCompanyAddress').value.trim();
-      state.sales.name = document.getElementById('settingSalesName').value.trim();
-      state.sales.phone = document.getElementById('settingSalesPhone').value.trim();
-      state.sales.line = document.getElementById('settingSalesLine').value.trim();
-      state.sales.branch = document.getElementById('settingSalesBranch').value.trim();
-      saveToStorage(true);
-      alert(`✅ บันทึกข้อมูลบริษัทและที่ปรึกษาการขายสำหรับแบรนด์ ${brandObj.name} เรียบร้อยแล้ว!`);
-    }
-
-    function addColorRow(name = '', price = 0) {
-      const container = document.getElementById('colorRowsContainer');
-      if (!container) return;
-      const div = document.createElement('div');
-      div.className = 'flex gap-2 items-center color-row';
-      div.innerHTML = `
-        <input type="text" placeholder="ชื่อสี" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input text-slate-800" value="${name}">
-        <input type="number" placeholder="ค่าสี" class="w-32 sm:w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input text-slate-800" value="${price}">
-        <button type="button" onclick="removeColorRow(this)" class="px-3.5 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-bold">✕</button>
-      `;
-      container.appendChild(div);
-    }
-
-    function removeColorRow(btn) {
-      const row = btn.parentElement;
-      if (document.querySelectorAll('.color-row').length > 1) row.remove();
-      else alert('ต้องมีรายการสีอย่างน้อย 1 รายการ');
-    }
-
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = err => reject(err);
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function handleImageUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const statusBox = document.getElementById('aiUploadStatus');
-      statusBox.className = 'text-xs text-blue-700 font-bold mt-2 flex items-center gap-2';
-      statusBox.innerHTML = '<span>⏳</span> กำลังส่งภาพตารางดอกเบี้ยให้ AI Vision วิเคราะห์...';
-
-      try {
-        const base64DataUrl = await fileToBase64(file);
-        const res = await apiFetch('/api/extract-rates', {
-          method: 'POST',
-          body: JSON.stringify({ image: base64DataUrl, mimeType: file.type })
-        }).catch(() => null);
-
-        let extractedRates = null;
-        if (res && res.ok) {
-          const data = await res.json();
-          extractedRates = data.rates || data;
-        } else {
-          await new Promise(r => setTimeout(r, 900));
-          extractedRates = {
-            30: { 24: '-', 36: '-', 48: '1.79', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
-            25: { 24: '-', 36: '-', 48: '1.79', 60: '2.45', 72: '2.75', 84: '3.40', 96: '-' },
-            20: { 24: '-', 36: '-', 48: '2.45', 60: '2.65', 72: '3.10', 84: '3.65', 96: '-' },
-            15: { 24: '-', 36: '-', 48: '2.95', 60: '3.20', 72: '3.50', 84: '4.25', 96: '-' },
-            10: { 24: '-', 36: '-', 48: '3.49', 60: '3.89', 72: '4.09', 84: '4.79', 96: '-' },
-            5:  { 24: '-', 36: '-', 48: '3.89', 60: '4.35', 72: '4.59', 84: '5.15', 96: '-' },
-            0:  { 24: '-', 36: '-', 48: '-', 60: '-', 72: '-', 84: '-', 96: '-' }
-          };
-        }
-
-        if (extractedRates) {
-          const isEasy = document.getElementById('chkEasyPayCampaign')?.checked;
-          if (isEasy) {
-            EASY_PAY_DOWN_TIERS.forEach(d => {
-              const r60 = extractedRates[d] ? extractedRates[d][60] : '-';
-              const inp1 = document.querySelector(`input[data-easy-down="${d}"][data-easy-col="col1"]`);
-              if (inp1) inp1.value = (r60 !== null && r60 !== undefined && r60 !== '') ? r60 : '-';
-            });
-          } else {
-            for (const [down, terms] of Object.entries(extractedRates)) {
-              for (const [month, rate] of Object.entries(terms)) {
-                const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
-                if (input) input.value = (rate !== null && rate !== undefined && rate !== '') ? rate : '-';
-              }
-            }
-          }
-          statusBox.className = 'text-xs text-emerald-600 font-bold mt-2';
-          statusBox.innerText = '✅ AI วิเคราะห์และเติมตัวเลขเรทดอกเบี้ยลงตารางสำเร็จ!';
-        }
-      } catch (err) {
-        statusBox.className = 'text-xs text-red-600 font-bold mt-2';
-        statusBox.innerText = '❌ เกิดข้อผิดพลาดในการอ่านไฟล์ภาพ';
-      }
+      setTimeout(() => {
+        const finInp = document.getElementById('financeCompanyInput');
+        const campInp = document.getElementById('campaignTitleInput');
+        const modelInp = document.getElementById('campaignCarModelInput');
+        if (finInp && matched) finInp.value = matched.finance || '';
+        if (campInp && matched && campKey) campInp.value = matched.campaignName || '';
+        document.getElementById('campaignFormSection')?.scrollIntoView({ behavior: 'smooth' });
+        if (campKey) modelInp?.focus();
+        else campInp?.focus();
+      }, 50);
     }
 
     async function saveCampaign() {
-      const finance = cleanDisplaySpaces(document.getElementById('financeCompanyInput').value);
-      const campaignName = cleanDisplaySpaces(document.getElementById('campaignTitleInput').value).toUpperCase();
-      const carModel = formatEPower(cleanDisplaySpaces(document.getElementById('campaignCarModelInput').value).toUpperCase());
+      const finance = cleanDisplaySpaces(document.getElementById('financeCompanyInput')?.value);
+      const campaignName = cleanDisplaySpaces(document.getElementById('campaignTitleInput')?.value).toUpperCase();
+      const carModel = formatEPower(cleanDisplaySpaces(document.getElementById('campaignCarModelInput')?.value).toUpperCase());
       const mgType = document.getElementById('campaignMgTypeInput')?.value || 'normal';
       const isEasyPay = document.getElementById('chkEasyPayCampaign')?.checked || false;
-      const balloonPct = isEasyPay ? (num(document.getElementById('campaignBalloonPctInput')?.value) || 30) : 30;
-      const comPct = num(document.getElementById('campaignComPctInput')?.value ?? 8);
-      const comMaxYears = Math.min(Math.max(num(document.getElementById('campaignComMaxYearsInput')?.value ?? 5), 1), 8);
-      const rawCommOptionsText = document.getElementById('campaignCommOptionsInput')?.value.trim() || '0%, 4%, 8%, 10%, 12%';
+      const balloonPct = num(document.getElementById('campaignBalloonPctInput')?.value) || 30;
+      const comPct = num(document.getElementById('campaignComPctInput')?.value);
+      const comMaxYears = Math.min(Math.max(num(document.getElementById('campaignComMaxYearsInput')?.value) || 5, 1), 8);
+      const commOptionsText = cleanDisplaySpaces(document.getElementById('campaignCommOptionsInput')?.value) || '0%, 4%, 8%, 10%, 12%';
 
       if (!finance || (!campaignName && !carModel)) {
-        alert('กรุณากรอกชื่อบริษัทไฟแนนซ์ ชื่อแคมเปญ และชื่อรุ่นรถให้ครบถ้วน');
+        alert('กรุณากรอกชื่อบริษัทไฟแนนซ์ และชื่อแคมเปญหรือชื่อรุ่นรถ');
         return;
       }
 
       const rates = {};
-      [...DOWN_TIERS, 0].forEach(down => {
-        rates[down] = {};
-        AVAILABLE_MONTHS.forEach(month => {
-          const input = document.querySelector(`input[data-down="${down}"][data-month="${month}"]`);
-          const val = input ? input.value.trim() : '-';
-          const parsed = parseFloat(val);
-          rates[down][month] = (val !== '-' && val !== '' && !isNaN(parsed)) ? parsed : null;
-        });
+      [...DOWN_TIERS, 0].forEach(d => {
+        rates[d] = { 24: null, 36: null, 48: null, 60: null, 72: null, 84: null, 96: null };
+      });
+      document.querySelectorAll('#standardMatrixWrapper input[data-down][data-month]').forEach(inp => {
+        const d = Number(inp.dataset.down);
+        const m = Number(inp.dataset.month);
+        const parsed = parseRateCell(inp.value);
+        if (rates[d]) rates[d][m] = parsed;
       });
 
-      const easyCommCol1 = num(document.getElementById('easyCommCol1Input')?.value ?? comPct);
-      const easyCommCol2 = num(document.getElementById('easyCommCol2Input')?.value ?? 16);
+      const easyCommCol1 = num(document.getElementById('easyCommCol1Input')?.value || 8);
+      const easyCommCol2 = num(document.getElementById('easyCommCol2Input')?.value || 16);
       const easyRates = createEmptyEasyPayRates();
-      [...EASY_PAY_DOWN_TIERS, 0].forEach(down => {
-        const inp1 = document.querySelector(`input[data-easy-down="${down}"][data-easy-col="col1"]`);
-        const inp2 = document.querySelector(`input[data-easy-down="${down}"][data-easy-col="col2"]`);
-        const v1 = inp1 ? inp1.value.trim() : '-';
-        const v2 = inp2 ? inp2.value.trim() : '-';
-        const p1 = parseFloat(v1);
-        const p2 = parseFloat(v2);
-        easyRates[down] = {
-          col1: (v1 !== '-' && v1 !== '' && !isNaN(p1)) ? p1 : null,
-          col2: (v2 !== '-' && v2 !== '' && !isNaN(p2)) ? p2 : null
-        };
+      document.querySelectorAll('#easyPayMatrixWrapper input[data-easy-down][data-easy-col]').forEach(inp => {
+        const d = Number(inp.dataset.easyDown);
+        const col = inp.dataset.easyCol;
+        const parsed = parseRateCell(inp.value);
+        if (easyRates[d]) easyRates[d][col] = parsed;
       });
 
       const specialDownLabel = isEasyPay
-        ? (document.getElementById('easySpecialDownLabelInput')?.value.trim() || '-')
-        : (document.getElementById('specialDownLabelInput')?.value.trim() || '-');
+        ? (cleanDisplaySpaces(document.getElementById('easySpecialDownLabelInput')?.value) || '-')
+        : (cleanDisplaySpaces(document.getElementById('specialDownLabelInput')?.value) || '-');
 
-      const finalCampName = campaignName || (isEasyPay ? 'EASY PAY' : 'STANDARD');
-      const finalCarModel = carModel || '';
-      const parsedCommOptions = isEasyPay
-        ? [...new Set([easyCommCol1, easyCommCol2])].sort((a, b) => a - b)
-        : parseCommOptionsList(rawCommOptionsText, comPct);
-
-      const existingId = state.editingCampaignIndex !== null ? state.campaigns[state.editingCampaignIndex]?.id : null;
-      const campaignData = normalizeCampaign({
-        id: existingId || `cmp_${Date.now()}`,
+      const existingId = state.editingCampaignIndex !== null ? state.campaigns[state.editingCampaignIndex]?.id : `cmp_${Date.now()}`;
+      const newCamp = normalizeCampaign({
+        id: existingId,
         brand: state.selectedBrand,
         finance,
-        campaignName: finalCampName,
-        carModel: finalCarModel,
-        name: finalCarModel ? `${finalCampName} - ${finalCarModel}` : finalCampName,
+        campaignName: campaignName || (isEasyPay ? 'EASY PAY' : 'STANDARD'),
+        carModel,
         mgType,
         isEasyPay,
         balloonPct,
         comPct: isEasyPay ? easyCommCol1 : comPct,
-        baseCommPct: isEasyPay ? easyCommCol1 : comPct,
         comMaxYears,
+        commOptionsText,
+        specialDownLabel,
         easyCommCol1,
         easyCommCol2,
-        easyRates,
-        commOptions: parsedCommOptions,
-        commOptionsText: parsedCommOptions.map(v => `${v}%`).join(', '),
-        specialDownLabel,
-        rates
+        rates,
+        easyRates
       });
 
       if (state.editingCampaignIndex !== null) {
-        state.campaigns[state.editingCampaignIndex] = campaignData;
+        state.campaigns[state.editingCampaignIndex] = newCamp;
         state.editingCampaignIndex = null;
       } else {
-        // หากบันทึกไฟแนนซ์+แคมเปญ+รุ่นเดียวกันซ้ำ ให้รวมทับอัตโนมัติ
-        const dupIdx = state.campaigns.findIndex(c =>
-          c.brand === state.selectedBrand &&
-          getFinanceFolderKey(c.finance) === getFinanceFolderKey(campaignData.finance) &&
-          getCampaignSubFolderKey(c.campaignName) === getCampaignSubFolderKey(campaignData.campaignName) &&
-          getModelFolderKey(c.carModel) === getModelFolderKey(campaignData.carModel) &&
-          Boolean(c.isEasyPay) === Boolean(campaignData.isEasyPay)
-        );
-        if (dupIdx !== -1) {
-          campaignData.id = state.campaigns[dupIdx].id;
-          state.campaigns[dupIdx] = campaignData;
-        } else {
-          state.campaigns.push(campaignData);
-        }
+        state.campaigns.push(newCamp);
       }
 
-      // เปิดโฟลเดอร์ที่เพิ่งบันทึกให้เห็นทันที
-      const fKey = getFinanceFolderKey(campaignData.finance);
-      const cKey = getCampaignSubFolderKey(campaignData.campaignName);
-      state.expandedFinanceFolders[fKey] = true;
-      state.expandedCampaignSubFolders[`${fKey}||${cKey}`] = true;
-
-      ensureValidTermsForPlans();
       saveToStorage(false);
       if (state.auth.token) {
         apiFetch('/api/campaigns', {
           method: 'POST',
-          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...campaignData })
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...newCamp })
         }).catch(() => null);
       }
-
       render();
-      alert('✅ บันทึกและจัดกลุ่มแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
+      alert('✅ บันทึกแคมเปญไฟแนนซ์เรียบร้อยแล้ว!');
     }
 
-    function editCampaign(index) {
-      state.editingCampaignIndex = index;
+    function editCampaign(idx) {
+      state.editingCampaignIndex = idx;
       render();
       document.getElementById('campaignFormSection')?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -6610,19 +6621,59 @@
       render();
     }
 
-    function deleteCampaign(index) {
-      if (confirm('ยืนยันการลบแคมเปญไฟแนนซ์นี้ใช่หรือไม่?')) {
-        const target = state.campaigns[index];
-        state.campaigns.splice(index, 1);
-        saveToStorage(false);
-        if (state.auth.token && target?.id) {
-          apiFetch(`/api/campaigns/${target.id}`, { method: 'DELETE' }).catch(() => null);
+    async function deleteCampaign(idx) {
+      if (!confirm('ยืนยันการลบแคมเปญไฟแนนซ์รายการนี้ใช่หรือไม่?')) return;
+      const target = state.campaigns[idx];
+      state.campaigns.splice(idx, 1);
+      if (state.editingCampaignIndex === idx) state.editingCampaignIndex = null;
+      saveToStorage(false);
+      if (state.auth.token && target?.id) {
+        apiFetch(`/api/campaigns/${target.id}`, { method: 'DELETE' }).catch(() => null);
+      }
+      render();
+    }
+
+    async function handleImageUpload(event) {
+      const file = event.target.files[0];
+      const statusEl = document.getElementById('aiUploadStatus');
+      if (!file || !statusEl) return;
+
+      statusEl.innerHTML = `<div class="mt-2 text-xs font-bold text-blue-700 animate-pulse">⏳ AI Vision กำลังวิเคราะห์ตารางดอกเบี้ยจากภาพ...</div>`;
+      try {
+        const base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const res = await apiFetch('/api/parse-rates', {
+          method: 'POST',
+          body: JSON.stringify({ imageBase64: base64Data, mimeType: file.type || 'image/jpeg' })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.rates) {
+          throw new Error(data.error || 'ไม่สามารถอ่านตารางจากภาพได้');
         }
-        render();
+
+        if (data.finance) document.getElementById('financeCompanyInput').value = data.finance;
+        if (data.campaignName) document.getElementById('campaignTitleInput').value = data.campaignName;
+        if (data.carModel) document.getElementById('campaignCarModelInput').value = formatEPower(data.carModel);
+
+        DOWN_TIERS.forEach(d => {
+          AVAILABLE_MONTHS.forEach(m => {
+            const val = data.rates[d]?.[m];
+            const inp = document.querySelector(`#standardMatrixWrapper input[data-down="${d}"][data-month="${m}"]`);
+            if (inp) inp.value = (val !== null && val !== undefined) ? val : '-';
+          });
+        });
+        statusEl.innerHTML = `<div class="mt-2 text-xs font-bold text-emerald-700">✅ AI อ่านตารางดอกเบี้ยสำเร็จ! กรุณาตรวจสอบตัวเลขแล้วกดปุ่มบันทึกด้านล่าง</div>`;
+      } catch (err) {
+        statusEl.innerHTML = `<div class="mt-2 text-xs font-bold text-rose-600">❌ ${err.message}</div>`;
       }
     }
 
-    // ==================== CAR FOLDERS & CRUD ====================
+    // --- Car Folders & CRUD ---
 
     function toggleCarFolder(modelKey) {
       state.expandedCarFolders[modelKey] = !state.expandedCarFolders[modelKey];
@@ -6630,106 +6681,93 @@
     }
 
     function quickFillCarModelForm(modelKey) {
+      const matched = state.cars.find(c => c.brand === state.selectedBrand && getModelFolderKey(c.model) === modelKey);
       state.editingCarId = null;
-      state.expandedCarFolders[modelKey] = true;
-      const matchedCar = state.cars.find(c => c.brand === state.selectedBrand && getModelFolderKey(c.model) === modelKey);
       render();
-      const modelInp = document.getElementById('newModelName');
-      const gradeInp = document.getElementById('newGradeName');
-      if (modelInp) modelInp.value = formatEPower(matchedCar ? matchedCar.model : modelKey);
-      document.getElementById('carFormSection')?.scrollIntoView({ behavior: 'smooth' });
-      if (gradeInp) gradeInp.focus();
+      setTimeout(() => {
+        const modInp = document.getElementById('newModelName');
+        if (modInp && matched) modInp.value = formatEPower(matched.model);
+        document.getElementById('carFormSection')?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('newGradeName')?.focus();
+      }, 50);
+    }
+
+    function addColorRow() {
+      const container = document.getElementById('colorRowsContainer');
+      if (!container) return;
+      const div = document.createElement('div');
+      div.className = 'flex gap-2 items-center color-row';
+      div.innerHTML = `
+        <input type="text" placeholder="ชื่อสี" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-name-input text-slate-800">
+        <input type="number" placeholder="ค่าสี" class="w-32 sm:w-40 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold color-price-input text-slate-800" value="0">
+        <button type="button" onclick="removeColorRow(this)" class="px-3.5 py-3 text-red-500 hover:bg-red-50 rounded-xl text-sm font-bold">✕</button>
+      `;
+      container.appendChild(div);
+    }
+
+    function removeColorRow(btn) {
+      const rows = document.querySelectorAll('#colorRowsContainer .color-row');
+      if (rows.length > 1) {
+        btn.closest('.color-row').remove();
+      }
     }
 
     async function addNewCarModel(e) {
       e.preventDefault();
-      const model = formatEPower(cleanDisplaySpaces(document.getElementById('newModelName').value).toUpperCase());
-      const grade = formatEPower(cleanDisplaySpaces(document.getElementById('newGradeName').value).toUpperCase());
-      const price = num(document.getElementById('newPrice').value);
-      const insurance = num(document.getElementById('newCarInsurance')?.value ?? 18900);
-      const regFee = num(document.getElementById('newCarRegFee')?.value ?? 3500);
-      const mgNormal = num(document.getElementById('newCarMgNormal')?.value ?? 115000);
-      const mgSpecial = num(document.getElementById('newCarMgSpecial')?.value ?? mgNormal);
-      const mgOther = num(document.getElementById('newCarMgOther')?.value ?? mgNormal);
+      const model = formatEPower(cleanDisplaySpaces(document.getElementById('newModelName')?.value).toUpperCase());
+      const grade = formatEPower(cleanDisplaySpaces(document.getElementById('newGradeName')?.value).toUpperCase());
+      const price = num(document.getElementById('newPrice')?.value);
+      const mgNormal = num(document.getElementById('newCarMgNormal')?.value);
+      const mgSpecial = num(document.getElementById('newCarMgSpecial')?.value);
+      const mgOther = num(document.getElementById('newCarMgOther')?.value);
+      const insurance = num(document.getElementById('newCarInsurance')?.value);
+      const regFee = num(document.getElementById('newCarRegFee')?.value);
 
       const colors = [];
-      document.querySelectorAll('.color-row').forEach(row => {
-        const cName = row.querySelector('.color-name-input').value.trim();
-        const cPrice = num(row.querySelector('.color-price-input').value);
+      document.querySelectorAll('#colorRowsContainer .color-row').forEach(row => {
+        const cName = cleanDisplaySpaces(row.querySelector('.color-name-input')?.value);
+        const cPrice = num(row.querySelector('.color-price-input')?.value);
         if (cName) colors.push({ name: cName, price: cPrice });
       });
+      if (colors.length === 0) colors.push({ name: 'สีมาตรฐาน', price: 0 });
 
-      const finalColors = colors.length > 0 ? colors : [{ name: 'สีมาตรฐาน', price: 0 }];
-      let savedCarObj = null;
+      const carId = state.editingCarId !== null ? state.editingCarId : `car_${Date.now()}`;
+      const carObj = normalizeCar({
+        id: carId,
+        brand: state.selectedBrand,
+        model,
+        grade,
+        price,
+        mgNormal,
+        mgSpecial,
+        mgOther,
+        mg: mgNormal,
+        insurance,
+        regFee,
+        colors
+      });
 
       if (state.editingCarId !== null) {
-        const car = state.cars.find(c => c.id == state.editingCarId);
-        if (car) {
-          car.model = model;
-          car.grade = grade;
-          car.price = price;
-          car.insurance = insurance;
-          car.regFee = regFee;
-          car.mgNormal = mgNormal;
-          car.mgSpecial = mgSpecial;
-          car.mgOther = mgOther;
-          car.mg = mgNormal;
-          car.colors = finalColors;
-          savedCarObj = car;
-        }
+        const idx = state.cars.findIndex(c => c.id == state.editingCarId);
+        if (idx !== -1) state.cars[idx] = carObj;
         state.editingCarId = null;
       } else {
-        const mKey = getModelFolderKey(model);
-        const dupCar = state.cars.find(c =>
-          c.brand === state.selectedBrand &&
-          getModelFolderKey(c.model) === mKey &&
-          cleanDisplaySpaces(c.grade).toUpperCase() === grade.toUpperCase()
-        );
-        if (dupCar) {
-          dupCar.model = model;
-          dupCar.price = price;
-          dupCar.insurance = insurance;
-          dupCar.regFee = regFee;
-          dupCar.mgNormal = mgNormal;
-          dupCar.mgSpecial = mgSpecial;
-          dupCar.mgOther = mgOther;
-          dupCar.mg = mgNormal;
-          dupCar.colors = finalColors;
-          savedCarObj = dupCar;
-        } else {
-          savedCarObj = normalizeCar({
-            id: `car_${Date.now()}`,
-            brand: state.selectedBrand,
-            model,
-            grade,
-            price,
-            insurance,
-            regFee,
-            mgNormal,
-            mgSpecial,
-            mgOther,
-            mg: mgNormal,
-            colors: finalColors
-          });
-          state.cars.push(savedCarObj);
-        }
+        state.cars.push(carObj);
       }
 
-      state.expandedCarFolders[getModelFolderKey(model)] = true;
       saveToStorage(false);
-      if (state.auth.token && savedCarObj) {
+      if (state.auth.token) {
         apiFetch('/api/cars', {
           method: 'POST',
-          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...savedCarObj })
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...carObj })
         }).catch(() => null);
       }
-
       render();
-      alert('✅ บันทึกและจัดกลุ่มรุ่นรถเรียบร้อยแล้ว!');
+      alert('✅ บันทึกข้อมูลรุ่นรถเรียบร้อยแล้ว!');
     }
 
-    function editCar(id) {
-      state.editingCarId = id;
+    function editCar(carId) {
+      state.editingCarId = carId;
       render();
       document.getElementById('carFormSection')?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -6739,18 +6777,18 @@
       render();
     }
 
-    function deleteCar(id) {
-      if (confirm('ยืนยันการลบข้อมูลรุ่นรถนี้ใช่หรือไม่?')) {
-        state.cars = state.cars.filter(c => c.id != id);
-        saveToStorage(false);
-        if (state.auth.token) {
-          apiFetch(`/api/cars/${id}`, { method: 'DELETE' }).catch(() => null);
-        }
-        render();
+    async function deleteCar(carId) {
+      if (!confirm('ยืนยันการลบรุ่นรถรายการนี้ใช่หรือไม่?')) return;
+      state.cars = state.cars.filter(c => c.id != carId);
+      if (state.editingCarId == carId) state.editingCarId = null;
+      saveToStorage(false);
+      if (state.auth.token) {
+        apiFetch(`/api/cars/${carId}`, { method: 'DELETE' }).catch(() => null);
       }
+      render();
     }
 
-    // ==================== ACCESSORIES FOLDERS & CRUD ====================
+    // --- Accessory Folders & CRUD ---
 
     function toggleAccFolder(modelKey) {
       state.expandedAccFolders[modelKey] = !state.expandedAccFolders[modelKey];
@@ -6758,79 +6796,56 @@
     }
 
     function quickFillAccModelForm(modelKey) {
+      const matched = state.accessoriesList.find(a => a.brand === state.selectedBrand && getModelFolderKey(a.model) === modelKey);
       state.editingAccessoryId = null;
-      state.expandedAccFolders[modelKey] = true;
-      const matchedAcc = state.accessoriesList.find(a => a.brand === state.selectedBrand && getModelFolderKey(a.model) === modelKey);
       render();
-      const modelInp = document.getElementById('accModelName');
-      const itemInp = document.getElementById('accItemName');
-      if (modelInp) modelInp.value = formatEPower(matchedAcc ? matchedAcc.model : modelKey);
-      document.getElementById('accessoryFormSection')?.scrollIntoView({ behavior: 'smooth' });
-      if (itemInp) itemInp.focus();
+      setTimeout(() => {
+        const modInp = document.getElementById('accModelName');
+        if (modInp && matched) modInp.value = formatEPower(matched.model);
+        document.getElementById('accessoryFormSection')?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('accItemName')?.focus();
+      }, 50);
     }
 
-    function saveAccessoryItem(e) {
+    async function saveAccessoryItem(e) {
       e.preventDefault();
-      const model = formatEPower(cleanDisplaySpaces(document.getElementById('accModelName').value).toUpperCase());
-      const name = cleanDisplaySpaces(document.getElementById('accItemName').value);
-      const price = num(document.getElementById('accItemPrice').value);
+      const model = formatEPower(cleanDisplaySpaces(document.getElementById('accModelName')?.value).toUpperCase());
+      const name = cleanDisplaySpaces(document.getElementById('accItemName')?.value);
+      const price = num(document.getElementById('accItemPrice')?.value);
+      if (!model || !name) return;
 
-      if (!model || !name) {
-        alert('กรุณากรอกชื่อรุ่นรถและชื่ออุปกรณ์ตกแต่งให้ครบถ้วน');
-        return;
-      }
+      const accId = state.editingAccessoryId !== null ? state.editingAccessoryId : `acc_${Date.now()}`;
+      const accObj = {
+        id: accId,
+        brand: state.selectedBrand,
+        model,
+        name,
+        price,
+        defaultChecked: true
+      };
 
-      let savedAccObj = null;
       if (state.editingAccessoryId !== null) {
-        const acc = state.accessoriesList.find(a => a.id == state.editingAccessoryId);
-        if (acc) {
-          acc.model = model;
-          acc.name = name;
-          acc.price = price;
-          savedAccObj = acc;
-        }
+        const idx = state.accessoriesList.findIndex(a => a.id == state.editingAccessoryId);
+        if (idx !== -1) state.accessoriesList[idx] = accObj;
         state.editingAccessoryId = null;
       } else {
-        const mKey = getModelFolderKey(model);
-        const dupAcc = state.accessoriesList.find(a =>
-          a.brand === state.selectedBrand &&
-          getModelFolderKey(a.model) === mKey &&
-          cleanDisplaySpaces(a.name).toUpperCase() === name.toUpperCase()
-        );
-        if (dupAcc) {
-          dupAcc.model = model;
-          dupAcc.price = price;
-          savedAccObj = dupAcc;
-        } else {
-          const newId = `acc_${Date.now()}`;
-          savedAccObj = {
-            id: newId,
-            brand: state.selectedBrand,
-            model,
-            name,
-            price,
-            defaultChecked: true
-          };
-          state.accessoriesList.push(savedAccObj);
-          state.margin.selectedAccMap[newId] = true;
-        }
+        state.accessoriesList.push(accObj);
       }
+      state.margin.selectedAccMap[accId] = true;
 
-      state.expandedAccFolders[getModelFolderKey(model)] = true;
       saveToStorage(false);
-      if (state.auth.token && savedAccObj) {
+      if (state.auth.token) {
         apiFetch('/api/accessories', {
           method: 'POST',
-          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...savedAccObj })
+          body: JSON.stringify({ showroomId: state.auth.activeShowroomId, ...accObj })
         }).catch(() => null);
       }
-
       render();
-      alert('✅ บันทึกและจัดกลุ่มอุปกรณ์ตกแต่งเรียบร้อยแล้ว!');
+      alert('✅ บันทึกอุปกรณ์ตกแต่งเรียบร้อยแล้ว!');
     }
 
-    function editAccessoryItem(id) {
-      state.editingAccessoryId = id;
+    function editAccessoryItem(accId) {
+      state.editingAccessoryId = accId;
       render();
       document.getElementById('accessoryFormSection')?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -6840,23 +6855,31 @@
       render();
     }
 
-    function deleteAccessoryItem(id) {
-      if (confirm('ยืนยันการลบอุปกรณ์ตกแต่งรายการนี้ใช่หรือไม่?')) {
-        state.accessoriesList = state.accessoriesList.filter(a => a.id != id);
-        delete state.margin.selectedAccMap[id];
-        saveToStorage(false);
-        if (state.auth.token) {
-          apiFetch(`/api/accessories/${id}`, { method: 'DELETE' }).catch(() => null);
-        }
-        render();
+    async function deleteAccessoryItem(accId) {
+      if (!confirm('ยืนยันการลบอุปกรณ์ตกแต่งรายการนี้ใช่หรือไม่?')) return;
+      state.accessoriesList = state.accessoriesList.filter(a => a.id != accId);
+      if (state.editingAccessoryId == accId) state.editingAccessoryId = null;
+      saveToStorage(false);
+      if (state.auth.token) {
+        apiFetch(`/api/accessories/${accId}`, { method: 'DELETE' }).catch(() => null);
       }
+      render();
     }
 
-    // ==================== BOOTSTRAP APP ====================
-    loadAuthSessionFromLocal();
-    loadDataFromStorage();
-    render();
-    syncFromCloud();
-  </script>
+    // ==================== APP INITIALIZATION ====================
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      loadAuthSessionFromLocal();
+      await loadDataFromStorage();
+      render();
+      if (state.auth.token) {
+        await syncFromCloud();
+        if (state.selectedBrand) {
+          const brandObj = BRANDS.find(b => b.id === state.selectedBrand);
+          if (brandObj) ensureBrandLogoDataUrl(brandObj);
+        }
+      }
+    });
+</script>
 </body>
 </html>
