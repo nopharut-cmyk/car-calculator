@@ -132,7 +132,7 @@
             <div class="flex items-center justify-between gap-2 py-1 border-b border-slate-100/80">
               <label class="flex items-center gap-2 cursor-pointer select-none font-medium text-slate-700">
                 <input type="checkbox" id="mgChkIns" onchange="onMarginInputChange()" class="w-4 h-4 accent-rose-600 rounded cursor-pointer">
-                <span>ค่าประกัน</span>
+                <span>ค่าประกัน <span id="mgFreeInsBadge" class="hidden ml-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">แถมจากแคมเปญ</span></span>
               </label>
               <div class="flex items-center gap-1">
                 <input type="text" id="mgValIns" oninput="onMarginInputChange()" onblur="this.value=fmt(num(this.value))" class="w-28 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-lg px-2.5 py-1 text-right font-bold text-slate-800 outline-none">
@@ -233,14 +233,18 @@
           </div>
         </div>
 
-        <!-- ฝั่งขวา: รายรับ -->
+        <!-- ฝั่งขวา: รายรับ (พร้อม Drop-down สลับ MG ปกติ / MG พิเศษ / MG other-ซื้อสด) -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-2.5 text-xs sm:text-sm">
           <div class="space-y-2.5">
-            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100 gap-2">
               <span class="font-bold text-emerald-600 flex items-center gap-1.5 text-sm">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span> รายรับ (Revenue)
               </span>
-              <span id="mgTypeBadge" class="text-[11px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">MG ปกติ</span>
+              <select id="mgTypeSelect" onchange="onMarginMgTypeChange(this.value)" class="text-[11px] sm:text-xs text-blue-700 font-extrabold bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-300 outline-none cursor-pointer transition-colors" title="สลับประเภท MG และดึงค่าประกันภัยชั้น 1 ที่ผูกไว้ให้อัตโนมัติ">
+                <option value="normal">MG ปกติ</option>
+                <option value="special">MG พิเศษ</option>
+                <option value="other">MG other-ซื้อสด</option>
+              </select>
             </div>
 
             <div class="flex items-center justify-between gap-2 py-1 border-b border-slate-100/80">
@@ -446,7 +450,6 @@
           <textarea id="modalFreebies" rows="4" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none leading-relaxed text-xs" placeholder="1. ประกันภัยชั้น 1 + พ.ร.บ.&#10;2. ฟิล์มกรองแสงเซรามิกรอบคัน&#10;3. ผ้ายางเข้ารูป / กรอบป้ายทะเบียน"></textarea>
         </div>
 
-        <!-- กล่องแนบรูปรถยนต์ (รูปแบบที่ 3) -->
         <div id="modalTemplate3CarPhotoBox" class="hidden p-3.5 rounded-2xl bg-amber-50/80 border-2 border-amber-300/80 text-xs space-y-2.5">
           <div class="flex flex-wrap justify-between items-center gap-2">
             <div>
@@ -551,7 +554,7 @@
           <span class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-sm">👑</span>
           <div>
             <h3 class="font-bold text-sm sm:text-lg text-slate-900">ระบบจัดการผู้ใช้งาน สิทธิ์ 3 ระดับ โชว์รูม และคัดลอกข้อมูล (Super Admin Panel)</h3>
-            <p class="text-[11px] text-slate-500">ระดับ 1 = 1 แบรนด์ | ระดับ 2 = 3 แบรนด์ | ระดับ 3 = แอดมินทุกแบรนด์ (ข้อมูลแต่ละคนแยกอิสระ และสามารถ Clone ข้อมูลส่งให้ผู้ใช้ได้)</p>
+            <p class="text-[11px] text-slate-500">ระดับ 1 = 1 แบรนด์ | ระดับ 2 = 3 แบรนด์ | ระดับ 3 = แอดมินทุกแบรนด์ (แยกคัดลอก รุ่นรถ/ราคา, MG, อุปกรณ์, แคมเปญ ได้อิสระ)</p>
           </div>
         </div>
         <button onclick="closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center font-bold">✕</button>
@@ -644,8 +647,10 @@
     function createDefaultMarginState() {
       return {
         selectedPlanId: 1,
+        mgTypeOverride: null, // null = อัตโนมัติตามแคมเปญ | 'normal' | 'special' | 'other'
         chkIns: true,
         insAmt: 18900,
+        insManual: false,
         chkAct: true,
         actAmt: 646,
         chkReg: true,
@@ -1009,12 +1014,18 @@
       if (!car) return car;
       car.model = formatEPower(cleanDisplaySpaces(car.model).toUpperCase());
       car.grade = formatEPower(cleanDisplaySpaces(car.grade).toUpperCase());
-      if (car.insurance === undefined) car.insurance = 18900;
+
+      const baseIns = car.insurance !== undefined ? num(car.insurance) : 18900;
+      car.insuranceNormal = car.insuranceNormal !== undefined ? num(car.insuranceNormal) : baseIns;
+      car.insuranceSpecial = car.insuranceSpecial !== undefined ? num(car.insuranceSpecial) : baseIns;
+      car.insuranceOther = car.insuranceOther !== undefined ? num(car.insuranceOther) : baseIns;
+      car.insurance = car.insuranceNormal;
+
       if (car.regFee === undefined) car.regFee = 3500;
-      const baseMg = car.mg !== undefined ? num(car.mg) : 115000;
+      const baseMg = car.mg !== undefined ? num(car.mg) : 0;
       if (car.mgNormal === undefined) car.mgNormal = baseMg;
       if (car.mgSpecial === undefined) car.mgSpecial = car.mgNormal;
-      if (car.mgOther === undefined) car.mgOther = Math.max(car.mgNormal - 20000, 0);
+      if (car.mgOther === undefined) car.mgOther = car.mgNormal;
       car.mg = car.mgNormal;
       if (!car.colors || car.colors.length === 0) {
         car.colors = [{ name: 'สีมาตรฐาน', price: 0 }];
@@ -1060,6 +1071,7 @@
       cp.carModel = formatEPower(cleanDisplaySpaces(cp.carModel).toUpperCase());
       cp.name = cp.carModel ? `${cp.campaignName} - ${cp.carModel}` : cp.campaignName;
       cp.isEasyPay = Boolean(cp.isEasyPay);
+      cp.freeInsurance = Boolean(cp.freeInsurance);
       if (cp.balloonPct === undefined) cp.balloonPct = 30;
       if (cp.mgType === undefined) cp.mgType = 'normal';
       if (cp.comPct === undefined) cp.comPct = cp.baseCommPct !== undefined ? num(cp.baseCommPct) : 8;
@@ -1100,10 +1112,11 @@
       const cName = cp.campaignName || cp.name || 'STANDARD';
       const cModel = formatEPower(cp.carModel || '');
       const easyBadge = cp.isEasyPay ? ` [EASY PAY ${cp.balloonPct || 30}%]` : '';
+      const freeInsBadge = cp.freeInsurance ? ' [แถมประกัน]' : '';
       if (cModel && cModel.toUpperCase() !== cName.toUpperCase()) {
-        return `${cName} (${cModel})${easyBadge}`;
+        return `${cName} (${cModel})${easyBadge}${freeInsBadge}`;
       }
-      return `${cName}${easyBadge}`;
+      return `${cName}${easyBadge}${freeInsBadge}`;
     }
 
     function hasValidSpecialDownRow(cp) {
@@ -1226,7 +1239,7 @@
       }
     }
 
-    // ==================== STORAGE & CLOUD SYNC (แยกอิสระรายบุคคล 100% — ผู้ใช้ใหม่เริ่มว่างเปล่า) ====================
+    // ==================== STORAGE & CLOUD SYNC ====================
 
     async function loadDataFromStorage() {
       state.cars = [];
@@ -1295,7 +1308,6 @@
           apiFetch('/api/quotations').catch(() => null)
         ]);
 
-        // อัปเดตจาก Cloud เสมอแม้จะเป็น Array ว่าง เพื่อให้ผู้ใช้ใหม่เริ่มจากฐานข้อมูลว่างเปล่าจริงๆ
         if (carsRes && carsRes.ok) {
           const cloudCars = await carsRes.json();
           if (Array.isArray(cloudCars)) {
@@ -1769,6 +1781,10 @@
 
     function switchMode(newStep) {
       state.step = newStep;
+      state.margin.mgTypeOverride = null;
+      state.margin.insManual = false;
+      state.margin.mgManual = false;
+
       if (newStep === 'settings') {
         state.expandedFinanceFolders = {};
         state.expandedCampaignSubFolders = {};
@@ -1801,7 +1817,7 @@
       } else if (newStep === 'calc') {
         ensureValidTermsForPlans();
       }
-      syncCurrentCarDefaultsToMargin(false);
+      syncCurrentCarDefaultsToMargin(true);
       render();
     }
 
@@ -2483,7 +2499,7 @@
                   <h3 class="font-bold text-slate-800 text-sm sm:text-base">การคำนวณยอดชำระสุทธิวันรับรถ และงบกำไร (โหมดซื้อสด)</h3>
                 </div>
                 <p class="text-xs text-slate-600 leading-relaxed">
-                  ในโหมดซื้อสด เมื่อกดปุ่ม <strong>"คำนวณรายรับ / รายจ่าย / กำไร (ฝั่งเซลล์)"</strong> ระบบจะดึงค่า <strong>MG other-ซื้อสด</strong> ของรุ่นรถมาคำนวณให้อัตโนมัติ และตัดแถวส่วนลดดาวน์ / VAT 7% ออกตามมาตรฐานการซื้อสด
+                  ในโหมดซื้อสด เมื่อกดปุ่ม <strong>"คำนวณรายรับ / รายจ่าย / กำไร (ฝั่งเซลล์)"</strong> ระบบจะดึงค่า <strong>MG other-ซื้อสด</strong> และ <strong>ค่าประกันภัยชั้น 1 (ของ MG other-ซื้อสด)</strong> มาคำนวณให้อัตโนมัติ และตัดแถวส่วนลดดาวน์ / VAT 7% ออกตามมาตรฐานการซื้อสด
                 </p>
               </div>
             </div>
@@ -2534,7 +2550,7 @@
       `;
     }
 
-    // ==================== 4. หน้าตั้งค่าระบบ (Settings + โฟลเดอร์ 2 ชั้นไฟแนนซ์ + โฟลเดอร์รุ่นรถ/อุปกรณ์) ====================
+    // ==================== 4. หน้าตั้งค่าระบบ (Settings + แถมประกัน + ประกัน 3 ช่องผูก MG) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
@@ -2569,6 +2585,7 @@
         : [{ name: 'สีมาตรฐาน', price: 0 }];
 
       const isEasyPayChecked = editingCamp && editingCamp.isEasyPay ? true : false;
+      const isFreeInsChecked = editingCamp && editingCamp.freeInsurance ? true : false;
       const specialDownVal = editingCamp && editingCamp.specialDownLabel !== undefined ? editingCamp.specialDownLabel : '-';
       const campMgType = editingCamp && editingCamp.mgType ? editingCamp.mgType : 'normal';
       const campComPct = editingCamp && editingCamp.comPct !== undefined ? editingCamp.comPct : 8;
@@ -2715,12 +2732,12 @@
               </div>
             </div>
 
-            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (โฟลเดอร์ 2 ชั้น) -->
+            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (พร้อม Checkbox ประกันภัยชั้น 1: ไม่แถม / แถม) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="campaignFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
                   <h3 class="font-bold text-slate-800 text-base">🏦 จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix)</h3>
-                  <p class="text-xs text-slate-500">แคมเปญที่ติ๊ก ☑️ EASY PAY (Balloon) จะไปแสดงเฉพาะในหน้าคำนวณ 🎈 บอลลูน (Balloon) เท่านั้น</p>
+                  <p class="text-xs text-slate-500">แคมเปญที่ติ๊ก ☑️ EASY PAY (Balloon) จะแสดงเฉพาะหน้า 🎈 บอลลูน | ติ๊ก ☑️ แถมประกัน เพื่อให้ต้นทุนประกันเป็น 0 ในหน้ากำไร</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" onclick="exportBrandExcelTemplate('campaigns')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
@@ -2733,26 +2750,40 @@
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <!-- แถวบน: บริษัทไฟแนนซ์ | ชื่อแคมเปญ | ชื่อรุ่นรถ | รูปแบบ MG | ประกันภัยชั้น 1 (ไม่แถม / แถม) -->
+              <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
                 <div class="sm:col-span-3">
                   <label class="block text-xs font-medium text-slate-500 mb-1">บริษัทไฟแนนซ์</label>
                   <input type="text" id="financeCompanyInput" value="${editingCamp ? editingCamp.finance : ''}" placeholder="เช่น นิสสัน ลีสซิ่ง" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white">
                 </div>
                 <div class="sm:col-span-3">
                   <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อแคมเปญ</label>
-                  <input type="text" id="campaignTitleInput" value="${editingCamp ? (editingCamp.campaignName || '') : ''}" placeholder="เช่น GENRATE, EXCLUSIVE" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white">
+                  <input type="text" id="campaignTitleInput" value="${editingCamp ? (editingCamp.campaignName || '') : ''}" placeholder="เช่น GENRATE แถมประกัน" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white">
                 </div>
-                <div class="sm:col-span-3">
+                <div class="sm:col-span-2">
                   <label class="block text-xs font-medium text-slate-500 mb-1">ชื่อรุ่นรถ</label>
-                  <input type="text" id="campaignCarModelInput" value="${editingCamp ? formatEPower(editingCamp.carModel || '') : ''}" placeholder="เช่น KICKS, SERENA" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white">
+                  <input type="text" id="campaignCarModelInput" value="${editingCamp ? formatEPower(editingCamp.carModel || '') : ''}" placeholder="เช่น KICKS" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white">
                 </div>
-                <div class="sm:col-span-3">
-                  <label class="block text-xs font-bold text-sky-700 mb-1">รูปแบบ MG (มาร์จิ้นแคมเปญ)</label>
-                  <select id="campaignMgTypeInput" class="w-full bg-sky-50 border-2 border-sky-300 focus:border-sky-500 rounded-xl p-3 text-sm font-extrabold text-sky-900 outline-none cursor-pointer">
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-sky-700 mb-1">รูปแบบ MG</label>
+                  <select id="campaignMgTypeInput" class="w-full bg-sky-50 border-2 border-sky-300 focus:border-sky-500 rounded-xl p-3 text-xs sm:text-sm font-extrabold text-sky-900 outline-none cursor-pointer">
                     <option value="normal" ${campMgType === 'normal' ? 'selected' : ''}>MG ปกติ</option>
                     <option value="special" ${campMgType === 'special' ? 'selected' : ''}>MG พิเศษ</option>
                     <option value="other" ${campMgType === 'other' ? 'selected' : ''}>MG other-ซื้อสด</option>
                   </select>
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-emerald-700 mb-1">ประกันภัยชั้น 1</label>
+                  <div class="bg-emerald-50/70 border-2 border-emerald-200 rounded-xl px-2.5 py-2 flex flex-row sm:flex-col gap-2 sm:gap-1 text-xs font-bold text-slate-800">
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" id="chkCampFreeInsNo" ${!isFreeInsChecked ? 'checked' : ''} onchange="setCampaignFreeInsChoice(false)" class="w-4 h-4 accent-slate-600 rounded cursor-pointer">
+                      <span>ไม่แถม</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none text-emerald-800">
+                      <input type="checkbox" id="chkCampFreeInsYes" ${isFreeInsChecked ? 'checked' : ''} onchange="setCampaignFreeInsChoice(true)" class="w-4 h-4 accent-emerald-600 rounded cursor-pointer">
+                      <span>แถม</span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -2978,6 +3009,7 @@
                                         <div>
                                           <span class="font-extrabold text-indigo-700 text-xs sm:text-sm">🚗 รุ่น: ${formatEPower(cp.carModel || 'ทุกรุ่น')}</span>
                                           ${cp.isEasyPay ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">🎈 EASY PAY (${cp.balloonPct}%)</span>` : ''}
+                                          ${cp.freeInsurance ? `<span class="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">✓ แถมประกัน</span>` : ''}
                                         </div>
                                         <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
                                           <span class="text-emerald-600 font-semibold">${termRangeLabel}</span>
@@ -3008,7 +3040,7 @@
               </div>
             </div>
 
-            <!-- 3. จัดการรุ่นรถและสีตัวถัง -->
+            <!-- 3. จัดการรุ่นรถและสีตัวถัง (เพิ่มค่าประกันภัยชั้น 1 เป็น 3 ช่องผูกคู่กับ MG ทั้ง 3 รูปแบบ) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="carFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <h3 class="font-bold text-slate-800 text-base">🚗 จัดการรุ่นรถและสีตัวถัง (${brandObj.name})</h3>
@@ -3053,32 +3085,52 @@
                   <button type="button" onclick="addColorRow()" class="text-xs text-blue-600 font-bold hover:underline mt-2.5 inline-block">+ เพิ่มตัวเลือกสีรถ</button>
                 </div>
 
+                <!-- MG 3 รูปแบบ + ค่าประกันภัยชั้น 1 (3 ช่องเชื่อมโยงกับแต่ละ MG) -->
                 <div class="pt-3 border-t border-slate-100 space-y-3">
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label class="block text-xs font-bold text-emerald-700 mb-1">1. MG ปกติ (บาท)</label>
-                      <input type="number" id="newCarMgNormal" value="${editingCar ? (editingCar.mgNormal ?? editingCar.mg ?? 115000) : 115000}" placeholder="เช่น 115000" class="w-full bg-emerald-50/70 border-2 border-emerald-200 focus:border-emerald-500 focus:bg-white rounded-xl p-3 text-sm font-extrabold text-emerald-950 outline-none">
+                    <!-- ชุดที่ 1: MG ปกติ + ประกันภัยชั้น 1 -->
+                    <div class="p-3 rounded-2xl bg-emerald-50/40 border border-emerald-200/80 space-y-2.5">
+                      <div>
+                        <label class="block text-xs font-bold text-emerald-700 mb-1">1. MG ปกติ (บาท)</label>
+                        <input type="number" id="newCarMgNormal" value="${editingCar ? (editingCar.mgNormal ?? editingCar.mg ?? 0) : 0}" placeholder="เช่น 115000" class="w-full bg-white border-2 border-emerald-200 focus:border-emerald-500 rounded-xl p-2.5 text-sm font-extrabold text-emerald-950 outline-none">
+                      </div>
+                      <div>
+                        <label class="block text-xs font-bold text-emerald-700 mb-1">ค่าประกันภัยชั้น 1 (บาท) <span class="text-[10px] font-semibold text-emerald-600">[MG ปกติ]</span></label>
+                        <input type="number" id="newCarInsNormal" value="${editingCar ? (editingCar.insuranceNormal ?? editingCar.insurance ?? 18900) : 18900}" placeholder="เช่น 25700" class="w-full bg-white border-2 border-emerald-200 focus:border-emerald-500 rounded-xl p-2.5 text-sm font-extrabold text-emerald-950 outline-none">
+                      </div>
                     </div>
-                    <div>
-                      <label class="block text-xs font-bold text-sky-700 mb-1">2. MG พิเศษ (บาท)</label>
-                      <input type="number" id="newCarMgSpecial" value="${editingCar ? (editingCar.mgSpecial ?? editingCar.mgNormal ?? 95000) : 95000}" placeholder="เช่น 95000" class="w-full bg-sky-50/70 border-2 border-sky-200 focus:border-sky-500 focus:bg-white rounded-xl p-3 text-sm font-extrabold text-sky-950 outline-none">
+
+                    <!-- ชุดที่ 2: MG พิเศษ + ประกันภัยชั้น 1 -->
+                    <div class="p-3 rounded-2xl bg-sky-50/40 border border-sky-200/80 space-y-2.5">
+                      <div>
+                        <label class="block text-xs font-bold text-sky-700 mb-1">2. MG พิเศษ (บาท)</label>
+                        <input type="number" id="newCarMgSpecial" value="${editingCar ? (editingCar.mgSpecial ?? editingCar.mgNormal ?? 0) : 0}" placeholder="เช่น 95000" class="w-full bg-white border-2 border-sky-200 focus:border-sky-500 rounded-xl p-2.5 text-sm font-extrabold text-sky-950 outline-none">
+                      </div>
+                      <div>
+                        <label class="block text-xs font-bold text-sky-700 mb-1">ค่าประกันภัยชั้น 1 (บาท) <span class="text-[10px] font-semibold text-sky-600">[MG พิเศษ]</span></label>
+                        <input type="number" id="newCarInsSpecial" value="${editingCar ? (editingCar.insuranceSpecial ?? 0) : 0}" placeholder="เช่น 0 หรือ 18900" class="w-full bg-white border-2 border-sky-200 focus:border-sky-500 rounded-xl p-2.5 text-sm font-extrabold text-sky-950 outline-none">
+                      </div>
                     </div>
-                    <div>
-                      <label class="block text-xs font-bold text-amber-700 mb-1">3. MG other-ซื้อสด (บาท)</label>
-                      <input type="number" id="newCarMgOther" value="${editingCar ? (editingCar.mgOther ?? 92000) : 92000}" placeholder="เช่น 92000" class="w-full bg-amber-50/70 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-xl p-3 text-sm font-extrabold text-amber-950 outline-none">
+
+                    <!-- ชุดที่ 3: MG other-ซื้อสด + ประกันภัยชั้น 1 -->
+                    <div class="p-3 rounded-2xl bg-amber-50/40 border border-amber-200/80 space-y-2.5">
+                      <div>
+                        <label class="block text-xs font-bold text-amber-700 mb-1">3. MG other-ซื้อสด (บาท)</label>
+                        <input type="number" id="newCarMgOther" value="${editingCar ? (editingCar.mgOther ?? 0) : 0}" placeholder="เช่น 92000" class="w-full bg-white border-2 border-amber-200 focus:border-amber-500 rounded-xl p-2.5 text-sm font-extrabold text-amber-950 outline-none">
+                      </div>
+                      <div>
+                        <label class="block text-xs font-bold text-amber-700 mb-1">ค่าประกันภัยชั้น 1 (บาท) <span class="text-[10px] font-semibold text-amber-600">[MG other]</span></label>
+                        <input type="number" id="newCarInsOther" value="${editingCar ? (editingCar.insuranceOther ?? editingCar.insurance ?? 18900) : 18900}" placeholder="เช่น 18900" class="w-full bg-white border-2 border-amber-200 focus:border-amber-500 rounded-xl p-2.5 text-sm font-extrabold text-amber-950 outline-none">
+                      </div>
                     </div>
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                     <div>
-                      <label class="block text-xs font-bold text-slate-600 mb-1">ค่าประกันภัยชั้น 1 (บาท)</label>
-                      <input type="number" id="newCarInsurance" value="${editingCar ? (editingCar.insurance ?? 18900) : 18900}" placeholder="เช่น 18900" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
-                    </div>
-                    <div>
                       <label class="block text-xs font-bold text-slate-600 mb-1">ค่าจดทะเบียน (บาท)</label>
                       <input type="number" id="newCarRegFee" value="${editingCar ? (editingCar.regFee ?? 3500) : 3500}" placeholder="เช่น 3500" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                     </div>
-                    <div>
+                    <div class="sm:col-span-2">
                       <button type="submit" class="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-all">
                         ${editingCar ? '💾 บันทึกการแก้ไขรุ่นรถ' : '💾 เพิ่มรุ่นรถลงในระบบ'}
                       </button>
@@ -3125,7 +3177,7 @@
                               <th class="p-3 border-b border-slate-200">รุ่น (Model)</th>
                               <th class="p-3 border-b border-slate-200">เกรด (Grade)</th>
                               <th class="p-3 border-b border-slate-200">ราคาตั้งต้น</th>
-                              <th class="p-3 border-b border-slate-200">ประกัน / ทะเบียน / MG (3 รูปแบบ)</th>
+                              <th class="p-3 border-b border-slate-200">MG + ค่าประกัน (3 รูปแบบ) / ทะเบียน</th>
                               <th class="p-3 border-b border-slate-200">สีและค่าสี</th>
                               <th class="p-3 border-b border-slate-200 text-center w-32">จัดการ</th>
                             </tr>
@@ -3137,10 +3189,10 @@
                                 <td class="p-3 font-bold text-slate-700">${formatEPower(car.grade)}</td>
                                 <td class="p-3 font-bold text-blue-600">${fmt(car.price)} ฿</td>
                                 <td class="p-3 text-[11px] space-y-0.5">
-                                  <div>ประกัน: <strong class="text-slate-800">${fmt(car.insurance ?? 18900)} ฿</strong> | ทะเบียน: <strong class="text-slate-800">${fmt(car.regFee ?? 3500)} ฿</strong></div>
-                                  <div>MG ปกติ: <strong class="text-emerald-700">${fmt(car.mgNormal ?? car.mg ?? 115000)} ฿</strong></div>
-                                  <div>MG พิเศษ: <strong class="text-sky-700">${fmt(car.mgSpecial ?? car.mgNormal ?? 95000)} ฿</strong></div>
-                                  <div>MG other-ซื้อสด: <strong class="text-amber-700">${fmt(car.mgOther ?? 92000)} ฿</strong></div>
+                                  <div>MG ปกติ: <strong class="text-emerald-700">${fmt(car.mgNormal ?? 0)} ฿</strong> | ประกัน: <strong class="text-emerald-800">${fmt(car.insuranceNormal ?? car.insurance ?? 18900)} ฿</strong></div>
+                                  <div>MG พิเศษ: <strong class="text-sky-700">${fmt(car.mgSpecial ?? 0)} ฿</strong> | ประกัน: <strong class="text-sky-800">${fmt(car.insuranceSpecial ?? 0)} ฿</strong></div>
+                                  <div>MG other: <strong class="text-amber-700">${fmt(car.mgOther ?? 0)} ฿</strong> | ประกัน: <strong class="text-amber-800">${fmt(car.insuranceOther ?? car.insurance ?? 18900)} ฿</strong></div>
+                                  <div class="text-slate-500">ทะเบียน: <strong class="text-slate-800">${fmt(car.regFee ?? 3500)} ฿</strong></div>
                                 </td>
                                 <td class="p-3 text-slate-600">
                                   ${(car.colors || []).map(c => `<span class="inline-block bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mr-1 mb-1 text-[11px]">${c.name} (+${fmt(c.price)}฿)</span>`).join('')}
@@ -3277,7 +3329,7 @@
       `;
     }
     // ==================== [สิ้นสุดโค้ดชุดที่ 3 — พิมพ์ "ต่อชุดที่ 4" เพื่อรับโค้ดชุดถัดไป] ====================
-// ==================== CORE LOGIC, RESET BUTTON, MG TYPE & FORMULAS ====================
+// ==================== CORE LOGIC, RESET BUTTON, MG & 3-INSURANCE RESOLUTION ====================
 
     function resetCurrentCalculation() {
       state.loadedQuotationId = null;
@@ -3311,40 +3363,81 @@
       return matched.length > 0 ? matched : brandAcc;
     }
 
-    function getAutoMgForCurrentModeAndPlan() {
+    function getActiveCampaignForMargin() {
+      if (state.step === 'cash') return null;
+      if (state.step === 'balloon') {
+        return state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
+      }
+      const plan = state.plans.find(p => p.id == state.margin.selectedPlanId) || state.plans[0];
+      return plan && plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
+    }
+
+    function getAutoMgAndInsuranceForCurrentModeAndPlan() {
       const car = state.selectedCarId ? state.cars.find(c => c.id == state.selectedCarId) : null;
       const mgNormal = car ? num(car.mgNormal ?? car.mg ?? 0) : 0;
       const mgSpecial = car ? num(car.mgSpecial ?? mgNormal) : 0;
       const mgOther = car ? num(car.mgOther ?? mgNormal) : 0;
 
-      if (state.step === 'cash') {
-        return { mgValue: mgOther, mgType: 'other', mgLabel: MG_TYPE_LABELS.other };
-      }
+      const baseIns = car ? num(car.insurance ?? 18900) : 18900;
+      const insNormal = car ? num(car.insuranceNormal ?? baseIns) : 18900;
+      const insSpecial = car ? num(car.insuranceSpecial ?? baseIns) : 0;
+      const insOther = car ? num(car.insuranceOther ?? baseIns) : 18900;
 
-      let activeCp = null;
-      if (state.step === 'balloon') {
-        activeCp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
+      const activeCp = getActiveCampaignForMargin();
+      const isFreeInsurance = Boolean(activeCp && activeCp.freeInsurance);
+
+      let mType = 'normal';
+      if (state.margin.mgTypeOverride && ['normal', 'special', 'other'].includes(state.margin.mgTypeOverride)) {
+        mType = state.margin.mgTypeOverride;
+      } else if (state.step === 'cash') {
+        mType = 'other';
       } else {
-        const plan = state.plans.find(p => p.id == state.margin.selectedPlanId) || state.plans[0];
-        activeCp = plan && plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
+        mType = (activeCp && activeCp.mgType) ? activeCp.mgType : 'normal';
       }
 
-      const mType = (activeCp && activeCp.mgType) ? activeCp.mgType : 'normal';
-      if (mType === 'special') return { mgValue: mgSpecial, mgType: 'special', mgLabel: MG_TYPE_LABELS.special };
-      if (mType === 'other') return { mgValue: mgOther, mgType: 'other', mgLabel: MG_TYPE_LABELS.other };
-      return { mgValue: mgNormal, mgType: 'normal', mgLabel: MG_TYPE_LABELS.normal };
+      let mgValue = mgNormal;
+      let rawInsValue = insNormal;
+      if (mType === 'special') {
+        mgValue = mgSpecial;
+        rawInsValue = insSpecial;
+      } else if (mType === 'other') {
+        mgValue = mgOther;
+        rawInsValue = insOther;
+      }
+
+      const insValue = isFreeInsurance ? 0 : rawInsValue;
+
+      return {
+        mgValue,
+        insValue,
+        mgType: mType,
+        mgLabel: MG_TYPE_LABELS[mType] || 'MG ปกติ',
+        isFreeInsurance
+      };
     }
 
     function syncCurrentCarDefaultsToMargin(resetManual = true) {
       const car = state.selectedCarId ? state.cars.find(c => c.id == state.selectedCarId) : null;
+      if (resetManual) {
+        state.margin.mgTypeOverride = null;
+        state.margin.mgManual = false;
+        state.margin.insManual = false;
+      }
       if (car) {
-        state.margin.insAmt = num(car.insurance ?? 18900);
         state.margin.regAmt = num(car.regFee ?? 3500);
       }
+
+      const autoInfo = getAutoMgAndInsuranceForCurrentModeAndPlan();
       if (resetManual || !state.margin.mgManual) {
-        const autoMg = getAutoMgForCurrentModeAndPlan();
-        state.margin.baseMg = autoMg.mgValue;
+        state.margin.baseMg = autoInfo.mgValue;
         state.margin.mgManual = false;
+      }
+      if (resetManual || !state.margin.insManual) {
+        state.margin.insAmt = autoInfo.insValue;
+        state.margin.insManual = false;
+        if (autoInfo.isFreeInsurance) {
+          state.margin.chkIns = true;
+        }
       }
 
       const modelAcc = getAccessoriesForCurrentModel();
@@ -3476,7 +3569,7 @@
       state.selectedModel = formatEPower(val);
       matchCampaignsForCurrentModel();
       ensureValidTermsForPlans();
-      syncCurrentCarDefaultsToMargin(false);
+      syncCurrentCarDefaultsToMargin(true);
       triggerCurrentModeCalc();
     }
 
@@ -3797,7 +3890,9 @@
       if (lblIns && valIns) {
         if (mg.chkIns) {
           lblIns.innerHTML = `ค่าประกัน <span class="text-[10px] text-emerald-400 font-normal">(แถมฟรี)</span>`;
-          valIns.innerHTML = `<span class="text-slate-500 line-through mr-1 text-[11px]">${fmt(mg.insAmt)}</span><span class="text-emerald-400">0 ฿</span>`;
+          valIns.innerHTML = mg.insAmt > 0
+            ? `<span class="text-slate-500 line-through mr-1 text-[11px]">${fmt(mg.insAmt)}</span><span class="text-emerald-400">0 ฿</span>`
+            : `<span class="text-emerald-400">0 ฿</span>`;
         } else {
           lblIns.innerHTML = `ค่าประกัน <span class="text-[10px] text-amber-300 font-semibold">(เก็บลูกค้า)</span>`;
           valIns.innerHTML = `<span class="text-white font-extrabold">+${fmt(mg.insAmt)} ฿</span>`;
@@ -3899,7 +3994,7 @@
         }
         plan.commYears = getDefaultCommYearsForTerm(plan.term, plan.campaignIdx);
       }
-      syncCurrentCarDefaultsToMargin(false);
+      syncCurrentCarDefaultsToMargin(true);
       render();
     }
 
@@ -3924,7 +4019,7 @@
           plan.term = validMonths[0] || 48;
         }
         plan.commYears = getDefaultCommYearsForTerm(plan.term, plan.campaignIdx);
-        syncCurrentCarDefaultsToMargin(false);
+        syncCurrentCarDefaultsToMargin(true);
         render();
       }
     }
@@ -4159,7 +4254,7 @@
         state.balloonPlan.balloonPct = num(cp.balloonPct) || 30;
       }
       state.balloonPlan.commYears = getDefaultCommYearsForTerm(60, state.balloonPlan.campaignIdx);
-      syncCurrentCarDefaultsToMargin(false);
+      syncCurrentCarDefaultsToMargin(true);
       render();
     }
 
@@ -4381,7 +4476,7 @@
       if (document.getElementById('cashResNetTotal')) document.getElementById('cashResNetTotal').innerText = fmt(netTotal) + ' ฿';
     }
 
-    // ==================== MARGIN & COMMISSION POPUP ENGINE (ฝั่งเซลล์) ====================
+    // ==================== MARGIN & COMMISSION POPUP ENGINE (ฝั่งเซลล์ + Drop-down สลับ MG & ค่าประกัน) ====================
 
     function getCheckedAccessoriesTotal() {
       const modelAcc = getAccessoriesForCurrentModel();
@@ -4540,12 +4635,42 @@
       }
     }
 
+    function onMarginMgTypeChange(newMgType) {
+      state.margin.mgTypeOverride = newMgType;
+      state.margin.mgManual = false;
+      state.margin.insManual = false;
+
+      const autoInfo = getAutoMgAndInsuranceForCurrentModeAndPlan();
+      state.margin.baseMg = autoInfo.mgValue;
+      state.margin.insAmt = autoInfo.insValue;
+      if (autoInfo.isFreeInsurance) {
+        state.margin.chkIns = true;
+      }
+
+      const mgInput = document.getElementById('mgValBaseMg');
+      const insInput = document.getElementById('mgValIns');
+      const insChk = document.getElementById('mgChkIns');
+      if (mgInput) mgInput.value = fmt(state.margin.baseMg);
+      if (insInput) insInput.value = fmt(state.margin.insAmt);
+      if (insChk) insChk.checked = state.margin.chkIns;
+
+      syncMarginToDeliveryFees();
+      updateBlackSummaryBoxDOM();
+      calculateMarginModal();
+    }
+
     function openMarginModal() {
       const mg = state.margin;
+      const autoInfo = getAutoMgAndInsuranceForCurrentModeAndPlan();
 
       if (!mg.mgManual) {
-        const autoMg = getAutoMgForCurrentModeAndPlan();
-        mg.baseMg = autoMg.mgValue;
+        mg.baseMg = autoInfo.mgValue;
+      }
+      if (!mg.insManual) {
+        mg.insAmt = autoInfo.insValue;
+        if (autoInfo.isFreeInsurance) {
+          mg.chkIns = true;
+        }
       }
 
       const planSel = document.getElementById('mgPlanSelector');
@@ -4581,6 +4706,9 @@
         }
         commRow.classList.remove('hidden');
       }
+
+      const mgTypeSelectEl = document.getElementById('mgTypeSelect');
+      if (mgTypeSelectEl) mgTypeSelectEl.value = autoInfo.mgType;
 
       document.getElementById('mgChkIns').checked = mg.chkIns;
       document.getElementById('mgValIns').value = fmt(mg.insAmt);
@@ -4650,19 +4778,32 @@
     function onMarginPlanSelect(planVal) {
       if (planVal !== 'balloon' && planVal !== 'cash') {
         state.margin.selectedPlanId = parseInt(planVal, 10) || 1;
+        state.margin.mgTypeOverride = null;
+        state.margin.mgManual = false;
+        state.margin.insManual = false;
+
         const planSel = document.getElementById('mgPlanSelector');
         const commPlanSel = document.getElementById('mgCommPlanSelector');
         if (planSel) planSel.value = state.margin.selectedPlanId;
         if (commPlanSel) commPlanSel.value = state.margin.selectedPlanId;
 
-        if (!state.margin.mgManual) {
-          const autoMg = getAutoMgForCurrentModeAndPlan();
-          state.margin.baseMg = autoMg.mgValue;
-          const mgInput = document.getElementById('mgValBaseMg');
-          if (mgInput) mgInput.value = fmt(state.margin.baseMg);
-        }
+        const autoInfo = getAutoMgAndInsuranceForCurrentModeAndPlan();
+        state.margin.baseMg = autoInfo.mgValue;
+        state.margin.insAmt = autoInfo.insValue;
+        if (autoInfo.isFreeInsurance) state.margin.chkIns = true;
+
+        const mgTypeSel = document.getElementById('mgTypeSelect');
+        const mgInput = document.getElementById('mgValBaseMg');
+        const insInput = document.getElementById('mgValIns');
+        const insChk = document.getElementById('mgChkIns');
+        if (mgTypeSel) mgTypeSel.value = autoInfo.mgType;
+        if (mgInput) mgInput.value = fmt(state.margin.baseMg);
+        if (insInput) insInput.value = fmt(state.margin.insAmt);
+        if (insChk) insChk.checked = state.margin.chkIns;
       }
       populateMarginCommSelects();
+      syncMarginToDeliveryFees();
+      updateBlackSummaryBoxDOM();
       calculateMarginModal();
     }
 
@@ -4742,6 +4883,9 @@
 
     function onMarginInputChange() {
       const mg = state.margin;
+      if (document.activeElement && document.activeElement.id === 'mgValIns') {
+        mg.insManual = true;
+      }
       mg.chkIns = document.getElementById('mgChkIns').checked;
       mg.insAmt = num(document.getElementById('mgValIns').value);
       mg.chkAct = document.getElementById('mgChkAct').checked;
@@ -4771,9 +4915,17 @@
       const addedAcc = num(document.getElementById('accessories')?.value ?? state.accessories);
       const checkedAccTotal = getCheckedAccessoriesTotal();
 
-      const autoMgInfo = getAutoMgForCurrentModeAndPlan();
-      const mgBadgeEl = document.getElementById('mgTypeBadge');
-      if (mgBadgeEl) mgBadgeEl.innerText = autoMgInfo.mgLabel;
+      const autoInfo = getAutoMgAndInsuranceForCurrentModeAndPlan();
+      const mgTypeSelectEl = document.getElementById('mgTypeSelect');
+      if (mgTypeSelectEl && document.activeElement !== mgTypeSelectEl) {
+        mgTypeSelectEl.value = autoInfo.mgType;
+      }
+
+      const freeInsBadge = document.getElementById('mgFreeInsBadge');
+      if (freeInsBadge) {
+        if (autoInfo.isFreeInsurance) freeInsBadge.classList.remove('hidden');
+        else freeInsBadge.classList.add('hidden');
+      }
 
       const netMg = mg.baseMg - carDiscount;
       const uioForMode = state.step === 'cash' ? 0 : mg.uioAmt;
@@ -6285,7 +6437,7 @@
       state.printTemplate = payload.printTemplate || 1;
       if (Array.isArray(payload.plans)) state.plans = payload.plans;
       if (payload.balloonPlan) state.balloonPlan = payload.balloonPlan;
-      if (payload.margin) state.margin = payload.margin;
+      if (payload.margin) state.margin = { ...createDefaultMarginState(), ...payload.margin };
       if (payload.deliveryFees) state.deliveryFees = payload.deliveryFees;
       if (payload.sales) state.sales = { ...state.sales, ...payload.sales };
       state.step = payload.step || 'calc';
@@ -6384,6 +6536,13 @@
       }, 50);
     }
 
+    function setCampaignFreeInsChoice(isFree) {
+      const chkNo = document.getElementById('chkCampFreeInsNo');
+      const chkYes = document.getElementById('chkCampFreeInsYes');
+      if (chkNo) chkNo.checked = !isFree;
+      if (chkYes) chkYes.checked = !!isFree;
+    }
+
     function toggleEasyPaySettingBox(checked) {
       const box = document.getElementById('settingEasyPayBalloonBox');
       const stdWrap = document.getElementById('standardMatrixWrapper');
@@ -6472,6 +6631,7 @@
       const campaignName = cleanDisplaySpaces(document.getElementById('campaignTitleInput')?.value).toUpperCase() || 'STANDARD';
       const carModel = formatEPower(cleanDisplaySpaces(document.getElementById('campaignCarModelInput')?.value).toUpperCase());
       const mgType = document.getElementById('campaignMgTypeInput')?.value || 'normal';
+      const freeInsurance = document.getElementById('chkCampFreeInsYes')?.checked || false;
       const isEasyPay = document.getElementById('chkEasyPayCampaign')?.checked || false;
       const balloonPct = num(document.getElementById('campaignBalloonPctInput')?.value ?? 30) || 30;
       const comPct = num(document.getElementById('campaignComPctInput')?.value ?? 8);
@@ -6520,6 +6680,7 @@
         campaignName,
         carModel,
         mgType,
+        freeInsurance,
         isEasyPay,
         balloonPct,
         comPct: isEasyPay ? easyCommCol1 : comPct,
@@ -6603,7 +6764,9 @@
       const mgNormal = num(document.getElementById('newCarMgNormal').value);
       const mgSpecial = num(document.getElementById('newCarMgSpecial').value);
       const mgOther = num(document.getElementById('newCarMgOther').value);
-      const insurance = num(document.getElementById('newCarInsurance').value);
+      const insuranceNormal = num(document.getElementById('newCarInsNormal').value);
+      const insuranceSpecial = num(document.getElementById('newCarInsSpecial').value);
+      const insuranceOther = num(document.getElementById('newCarInsOther').value);
       const regFee = num(document.getElementById('newCarRegFee').value);
 
       const colors = [];
@@ -6620,7 +6783,10 @@
         model,
         grade,
         price,
-        insurance,
+        insurance: insuranceNormal,
+        insuranceNormal,
+        insuranceSpecial,
+        insuranceOther,
         regFee,
         mgNormal,
         mgSpecial,
@@ -6644,7 +6810,7 @@
         }).catch(() => null);
       }
 
-      alert('✅ บันทึกข้อมูลรุ่นรถเรียบร้อยแล้ว!');
+      alert('✅ บันทึกข้อมูลรุ่นรถและค่าประกัน 3 รูปแบบเรียบร้อยแล้ว!');
       render();
     }
 
@@ -6748,7 +6914,9 @@
           Model: formatEPower(c.model),
           Grade: formatEPower(c.grade),
           Price: num(c.price),
-          Insurance: num(c.insurance ?? 18900),
+          Insurance_Normal: num(c.insuranceNormal ?? c.insurance ?? 18900),
+          Insurance_Special: num(c.insuranceSpecial ?? 0),
+          Insurance_Other: num(c.insuranceOther ?? c.insurance ?? 18900),
           RegFee: num(c.regFee ?? 3500),
           MG_Normal: num(c.mgNormal ?? c.mg ?? 0),
           MG_Special: num(c.mgSpecial ?? 0),
@@ -6756,7 +6924,12 @@
           Colors: (c.colors || []).map(col => `${col.name}:${col.price}`).join(' | ')
         }));
         if (rows.length === 0) {
-          rows.push({ Model: 'EXAMPLE', Grade: 'V', Price: 850000, Insurance: 18900, RegFee: 3500, MG_Normal: 80000, MG_Special: 50000, MG_Other_Cash: 70000, Colors: 'สีมาตรฐาน:0 | สีขาวมุก:10000' });
+          rows.push({
+            Model: 'EXAMPLE', Grade: 'V', Price: 850000,
+            Insurance_Normal: 25700, Insurance_Special: 0, Insurance_Other: 18900,
+            RegFee: 3500, MG_Normal: 80000, MG_Special: 50000, MG_Other_Cash: 70000,
+            Colors: 'สีมาตรฐาน:0 | สีขาวมุก:10000'
+          });
         }
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), '1_Cars');
       }
@@ -6787,6 +6960,7 @@
                 CampaignName: cp.campaignName,
                 CarModel: formatEPower(cp.carModel || ''),
                 MG_Type: cp.mgType || 'normal',
+                FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
                 IsEasyPay: 'TRUE',
                 BalloonPct: cp.balloonPct ?? 30,
                 ComPct: cp.easyCommCol1 ?? 8,
@@ -6807,6 +6981,7 @@
                 CampaignName: cp.campaignName,
                 CarModel: formatEPower(cp.carModel || ''),
                 MG_Type: cp.mgType || 'normal',
+                FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
                 IsEasyPay: 'FALSE',
                 BalloonPct: 30,
                 ComPct: cp.comPct ?? 8,
@@ -6825,7 +7000,12 @@
           }
         });
         if (rows.length === 0) {
-          rows.push({ Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'STANDARD', CarModel: 'EXAMPLE', MG_Type: 'normal', IsEasyPay: 'FALSE', BalloonPct: 30, ComPct: 8, ComMaxYears: 5, CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%', M24: 1.99, M36: 2.09, M48: 2.19, M60: 2.39, M72: 2.59, M84: 2.89, M96: '-' });
+          rows.push({
+            Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'STANDARD', CarModel: 'EXAMPLE',
+            MG_Type: 'normal', FreeInsurance: 'FALSE', IsEasyPay: 'FALSE', BalloonPct: 30,
+            ComPct: 8, ComMaxYears: 5, CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%',
+            M24: 1.99, M36: 2.09, M48: 2.19, M60: 2.39, M72: 2.59, M84: 2.89, M96: '-'
+          });
         }
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), '3_Campaigns');
       }
@@ -6870,13 +7050,21 @@
               return { name: cleanDisplaySpaces(cName || 'สีมาตรฐาน'), price: num(cPrice) };
             }).filter(c => c.name);
 
+            const fallbackIns = num(r.Insurance ?? 18900);
+            const insNormal = r.Insurance_Normal !== undefined ? num(r.Insurance_Normal) : fallbackIns;
+            const insSpecial = r.Insurance_Special !== undefined ? num(r.Insurance_Special) : fallbackIns;
+            const insOther = r.Insurance_Other !== undefined ? num(r.Insurance_Other) : fallbackIns;
+
             const carObj = normalizeCar({
               id: `car_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
               brand: state.selectedBrand,
               model,
               grade,
               price: num(r.Price ?? r['ราคา']),
-              insurance: num(r.Insurance ?? 18900),
+              insurance: insNormal,
+              insuranceNormal: insNormal,
+              insuranceSpecial: insSpecial,
+              insuranceOther: insOther,
               regFee: num(r.RegFee ?? 3500),
               mgNormal: num(r.MG_Normal ?? r.MG ?? 0),
               mgSpecial: num(r.MG_Special ?? r.MG_Normal ?? 0),
@@ -6934,6 +7122,7 @@
             const campaignName = cleanDisplaySpaces(r.CampaignName || r['แคมเปญ'] || 'STANDARD').toUpperCase();
             const carModel = formatEPower(cleanDisplaySpaces(r.CarModel || r.Model || '').toUpperCase());
             const isEasyPay = String(r.IsEasyPay || 'FALSE').toUpperCase() === 'TRUE';
+            const freeInsurance = String(r.FreeInsurance || 'FALSE').toUpperCase() === 'TRUE';
             if (!finance) return;
 
             const key = `${getFinanceFolderKey(finance)}||${campaignName}||${getModelFolderKey(carModel)}||${isEasyPay ? '1' : '0'}`;
@@ -6947,6 +7136,7 @@
                 campaignName,
                 carModel,
                 mgType: String(r.MG_Type || 'normal').toLowerCase(),
+                freeInsurance,
                 isEasyPay,
                 balloonPct: num(r.BalloonPct ?? 30) || 30,
                 comPct: num(r.ComPct ?? 8),
@@ -7013,7 +7203,6 @@
 
         saveToStorage(false);
 
-        // Bulk Sync ขึ้น Cloud D1
         if (state.auth.token) {
           const bulkPromises = [];
           if (importedCars.length > 0) {
@@ -7046,7 +7235,7 @@
       event.target.value = '';
     }
 
-    // ==================== SUPER ADMIN PANEL (จัดการผู้ใช้, โชว์รูม, และ Clone ข้อมูลส่งให้ผู้ใช้) ====================
+    // ==================== SUPER ADMIN PANEL (แยกคัดลอก รุ่นรถ/ราคา, MG, อุปกรณ์, แคมเปญ อิสระ) ====================
 
     let adminCache = { users: [], showrooms: [] };
 
@@ -7106,11 +7295,11 @@
           </form>
         </div>
 
-        <!-- 2. รายชื่อผู้ใช้งาน + ปุ่ม Clone ข้อมูลส่งให้ผู้ใช้แต่ละคน -->
+        <!-- 2. รายชื่อผู้ใช้งาน + ปุ่ม Clone ข้อมูลแยก 4 ส่วน -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
           <div class="flex flex-wrap justify-between items-center gap-2">
             <h4 class="font-bold text-slate-900 text-sm">👥 รายชื่อผู้ใช้งานทั้งหมด (${users.length} บัญชี)</h4>
-            <span class="text-[11px] text-slate-500">กดปุ่ม <strong>"📋 คัดลอกข้อมูลส่งให้"</strong> เพื่อส่งสำเนารุ่นรถ / อุปกรณ์ / แคมเปญ จากฐานข้อมูล Admin ไปยังบัญชีผู้ใช้นั้น</span>
+            <span class="text-[11px] text-slate-500">กดปุ่ม <strong>"📋 คัดลอกข้อมูลส่งให้"</strong> เพื่อเลือกส่งเฉพาะ รุ่นรถ/ราคา, MG, อุปกรณ์ตกแต่ง หรือแคมเปญดอกเบี้ย</span>
           </div>
 
           <div class="space-y-2.5">
@@ -7155,11 +7344,11 @@
                     </div>
                   </div>
 
-                  <!-- กล่องเลือกข้อมูลที่จะ Clone ส่งให้ผู้ใช้รายนี้ -->
+                  <!-- กล่องเลือกข้อมูลที่จะ Clone ส่งให้ผู้ใช้รายนี้ (แยก 4 ส่วนอิสระ) -->
                   ${!isAdminUser ? `
                     <div id="adminCloneBox_${u.id}" class="hidden p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 space-y-2">
                       <div class="font-bold text-emerald-950 text-[11px]">
-                        📋 ส่งสำเนาข้อมูลจากฐานข้อมูล Admin ปัจจุบัน ไปยังบัญชีของ "${u.fullName}" (ไม่คัดลอกข้อมูลบริษัท/LINE ID ของ Admin):
+                        📋 ส่งสำเนาข้อมูลจากฐานข้อมูล Admin ปัจจุบัน ไปยังบัญชีของ "${u.fullName}" (หากไม่ติ๊ก MG รุ่นใหม่จะเป็น 0 และรุ่นเดิมจะคงค่า MG ที่ผู้รับกรอกไว้):
                       </div>
                       <div class="flex flex-wrap items-center gap-3 text-[11px]">
                         <select id="cloneBrand_${u.id}" class="bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 outline-none">
@@ -7167,7 +7356,10 @@
                           ${BRANDS.map(b => `<option value="${b.id}" ${u.allowedBrands?.includes(b.id) ? 'selected' : ''}>เฉพาะแบรนด์ ${b.name}</option>`).join('')}
                         </select>
                         <label class="flex items-center gap-1 font-semibold text-slate-700 cursor-pointer">
-                          <input type="checkbox" id="cloneCars_${u.id}" checked class="accent-emerald-600"> รุ่นรถ/ราคา/MG
+                          <input type="checkbox" id="cloneCars_${u.id}" checked class="accent-emerald-600"> รุ่นรถ/ราคา
+                        </label>
+                        <label class="flex items-center gap-1 font-semibold text-slate-700 cursor-pointer">
+                          <input type="checkbox" id="cloneMg_${u.id}" class="accent-emerald-600"> MG
                         </label>
                         <label class="flex items-center gap-1 font-semibold text-slate-700 cursor-pointer">
                           <input type="checkbox" id="cloneAcc_${u.id}" checked class="accent-emerald-600"> อุปกรณ์ตกแต่ง
@@ -7196,17 +7388,24 @@
 
     async function executeCloneDataToUser(userId, userName) {
       const brand = document.getElementById(`cloneBrand_${userId}`)?.value || 'ALL';
-      const includeCars = document.getElementById(`cloneCars_${userId}`)?.checked !== false;
-      const includeAccessories = document.getElementById(`cloneAcc_${userId}`)?.checked !== false;
-      const includeCampaigns = document.getElementById(`cloneCamps_${userId}`)?.checked !== false;
+      const includeCars = document.getElementById(`cloneCars_${userId}`)?.checked || false;
+      const includeMg = document.getElementById(`cloneMg_${userId}`)?.checked || false;
+      const includeAccessories = document.getElementById(`cloneAcc_${userId}`)?.checked || false;
+      const includeCampaigns = document.getElementById(`cloneCamps_${userId}`)?.checked || false;
 
-      if (!includeCars && !includeAccessories && !includeCampaigns) {
+      if (!includeCars && !includeMg && !includeAccessories && !includeCampaigns) {
         alert('กรุณาเลือกข้อมูลอย่างน้อย 1 ประเภทที่ต้องการคัดลอก');
         return;
       }
 
       const brandText = brand === 'ALL' ? 'ทุกแบรนด์' : brand.toUpperCase();
-      if (!confirm(`ยืนยันการคัดลอกข้อมูล (${brandText}) ไปยังบัญชีของ "${userName}"?\n\n* ข้อมูลจะถูกแยกเก็บเป็นชุดส่วนตัวของ "${userName}" เมื่อผู้ใช้แก้ไขจะไม่กระทบข้อมูลของ Admin และคนอื่น`)) {
+      const selectedParts = [];
+      if (includeCars) selectedParts.push('รุ่นรถ/ราคา (+ประกัน 3 ช่อง)');
+      if (includeMg) selectedParts.push('MG');
+      if (includeAccessories) selectedParts.push('อุปกรณ์ตกแต่ง');
+      if (includeCampaigns) selectedParts.push('แคมเปญดอกเบี้ย');
+
+      if (!confirm(`ยืนยันการคัดลอกข้อมูล (${brandText})\nรายการ: ${selectedParts.join(', ')}\nไปยังบัญชีของ "${userName}"?`)) {
         return;
       }
 
@@ -7217,6 +7416,7 @@
             sourceShowroomId: state.auth.activeShowroomId,
             brand,
             includeCars,
+            includeMg,
             includeAccessories,
             includeCampaigns
           })
@@ -7226,7 +7426,7 @@
           alert(data.error || 'คัดลอกข้อมูลไม่สำเร็จ');
           return;
         }
-        alert(`✅ คัดลอกข้อมูลส่งให้ "${userName}" เรียบร้อยแล้ว!\n• รุ่นรถ: ${data.cloned?.cars || 0} รายการ\n• อุปกรณ์ตกแต่ง: ${data.cloned?.accessories || 0} รายการ\n• แคมเปญไฟแนนซ์: ${data.cloned?.campaigns || 0} แคมเปญ`);
+        alert(`✅ คัดลอกข้อมูลส่งให้ "${userName}" เรียบร้อยแล้ว!\n• รุ่นรถ/ราคา: ${data.cloned?.cars || 0} รายการ\n• อัปเดต MG: ${data.cloned?.mg || 0} รายการ\n• อุปกรณ์ตกแต่ง: ${data.cloned?.accessories || 0} รายการ\n• แคมเปญไฟแนนซ์: ${data.cloned?.campaigns || 0} แคมเปญ`);
         toggleAdminCloneBox(userId);
       } catch (err) {
         alert('❌ เกิดข้อผิดพลาดในการคัดลอกข้อมูล');
