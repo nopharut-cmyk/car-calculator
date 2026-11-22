@@ -10,7 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS (xlsx) สำหรับส่งออกและนำเข้าไฟล์ Excel (.xlsx 3 Sheets) และ CSV -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- html2canvas สำหรับบันทึกใบเสนอราคาเป็นไฟล์รูปภาพ PNG / JPG ความละเอียดสูง -->
+  <!-- html2canvas สำหรับบันทึกใบเสนอราคาและใบราคาเป็นไฟล์รูปภาพ PNG / JPG ความละเอียดสูง -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script>
     tailwind.config = {
@@ -33,7 +33,7 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-    /* Print Media Query - A4 1 Page Strict Lock (รองรับทั้งรูปแบบที่ 1, รูปแบบที่ 2 และ รูปแบบที่ 3) */
+    /* Print Media Query - A4 1 Page Strict Lock */
     @media print {
       @page {
         size: A4 portrait;
@@ -49,7 +49,7 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      #app, #printModal, #marginModal, #historyModal, #adminModal, #imageCaptureOverlay, .no-print {
+      #app, #printModal, #marginModal, #historyModal, #adminModal, #priceListPreviewModal, #imageCaptureOverlay, .no-print {
         display: none !important;
       }
       #printArea {
@@ -71,7 +71,6 @@
       }
     }
     .print-only { display: none; }
-    /* โหมดเรนเดอร์สำหรับ html2canvas จับภาพใบเสนอราคาขนาด A4 (794px) คมชัดไม่ขาวว่างเปล่า */
     .capture-render-mode {
       display: block !important;
       position: fixed !important;
@@ -95,12 +94,43 @@
   <!-- Overlay แสดงสถานะขณะกำลังสร้างไฟล์รูปภาพ PNG / JPG -->
   <div id="imageCaptureOverlay" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[60] hidden flex flex-col items-center justify-center text-white p-4 no-print">
     <div class="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-3"></div>
-    <div class="font-bold text-sm sm:text-base">กำลังสร้างไฟล์รูปภาพใบเสนอราคาความละเอียดสูง...</div>
+    <div class="font-bold text-sm sm:text-base">กำลังสร้างไฟล์รูปภาพความละเอียดสูง...</div>
     <div class="text-xs text-slate-300 mt-1">กรุณารอสักครู่ ระบบกำลังจัดหน้ากระดาษขนาด A4</div>
   </div>
 
   <!-- Hidden File Input สำหรับนำเข้าไฟล์ Excel / CSV -->
   <input type="file" id="globalExcelImportInput" accept=".xlsx,.xls,.csv" class="hidden no-print" onchange="handleExcelImportFile(event)">
+
+  <!-- Modal พรีวิวใบราคาและตารางผ่อนชำระ (Price List Preview + PNG / JPG / PDF) -->
+  <div id="priceListPreviewModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2 sm:p-4 no-print">
+    <div class="bg-slate-100 rounded-3xl max-w-4xl w-full p-3.5 sm:p-5 shadow-2xl border border-slate-200 flex flex-col max-h-[95vh]">
+      <div class="flex flex-wrap justify-between items-center gap-2 pb-3 border-b border-slate-200">
+        <div class="flex items-center gap-2">
+          <span class="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-lg">🧾</span>
+          <div>
+            <h3 class="font-bold text-sm sm:text-base text-slate-900">ตัวอย่างใบราคาและตารางผ่อนชำระ (A4)</h3>
+            <p class="text-[11px] text-slate-500">ตรวจสอบความเรียบร้อยแล้วเลือกบันทึกรูป PNG / JPG หรือพิมพ์ PDF ได้ทันที</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" onclick="exportPriceListAsImage('png')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1">
+            <span>🖼️</span> บันทึก PNG
+          </button>
+          <button type="button" onclick="exportPriceListAsImage('jpg')" class="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1">
+            <span>📷</span> บันทึก JPG
+          </button>
+          <button type="button" onclick="printPriceListPdf()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1">
+            <span>🖨️</span> พิมพ์ / PDF (A4)
+          </button>
+          <button type="button" onclick="closePriceListPreviewModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold ml-1">✕</button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-auto mt-3 flex justify-center bg-slate-200/70 rounded-2xl p-3">
+        <div id="priceListPreviewStage" class="bg-white shadow-xl rounded-xl p-5 w-[794px] min-w-[794px] box-border"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal คำนวณรายรับ / รายจ่าย / กำไร (Margin & Commission) ฝั่งเซลล์ -->
   <div id="marginModal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2.5 sm:p-4 no-print transition-opacity">
@@ -233,7 +263,7 @@
           </div>
         </div>
 
-        <!-- ฝั่งขวา: รายรับ (พร้อม Drop-down สลับ MG ปกติ / MG พิเศษ / MG other-ซื้อสด) -->
+        <!-- ฝั่งขวา: รายรับ -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-2.5 text-xs sm:text-sm">
           <div class="space-y-2.5">
             <div class="flex items-center justify-between pb-2 border-b border-slate-100 gap-2">
@@ -554,7 +584,7 @@
           <span class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-sm">👑</span>
           <div>
             <h3 class="font-bold text-sm sm:text-lg text-slate-900">ระบบจัดการผู้ใช้งาน สิทธิ์ 3 ระดับ โชว์รูม และคัดลอกข้อมูล (Super Admin Panel)</h3>
-            <p class="text-[11px] text-slate-500">ระดับ 1 = 1 แบรนด์ | ระดับ 2 = 3 แบรนด์ | ระดับ 3 = แอดมินทุกแบรนด์ (แยกคัดลอก รุ่นรถ/ราคา, MG, อุปกรณ์, แคมเปญ ได้อิสระ)</p>
+            <p class="text-[11px] text-slate-500">ระดับ 1 = 1 แบรนด์ | ระดับ 2 = 3 แบรนด์ | ระดับ 3 = แอดมินทุกแบรนด์ (ล็อกอินด้วยอีเมลหรือเบอร์โทรได้)</p>
           </div>
         </div>
         <button onclick="closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center font-bold">✕</button>
@@ -564,7 +594,7 @@
     </div>
   </div>
 
-  <!-- พื้นที่สำหรับพิมพ์ A4 (1 หน้าพอดี ไม่มีช่องเซ็นชื่อด้านล่าง) -->
+  <!-- พื้นที่สำหรับพิมพ์ A4 (ใช้ร่วมกันทั้งใบเสนอราคาและใบราคา) -->
   <div id="printArea" class="print-only text-slate-900 font-sans"></div>
 
   <!-- ==================== [สิ้นสุดโค้ดชุดที่ 1 — พิมพ์ "ต่อชุดที่ 2" เพื่อรับโค้ดชุดถัดไป] ==================== -->
@@ -647,7 +677,7 @@
     function createDefaultMarginState() {
       return {
         selectedPlanId: 1,
-        mgTypeOverride: null, // null = อัตโนมัติตามแคมเปญ | 'normal' | 'special' | 'other'
+        mgTypeOverride: null,
         chkIns: true,
         insAmt: 18900,
         insManual: false,
@@ -683,8 +713,19 @@
       };
     }
 
+    function createDefaultPriceListState() {
+      return {
+        activeModel: '',
+        selectedCarIds: [],
+        financeText: '',
+        campaignIdx: -1,
+        easyPayCampaignIdx: -1,
+        qrCodeDataUrl: ''
+      };
+    }
+
     let state = {
-      step: 'login', // 'login' | 'brand' | 'calc' | 'balloon' | 'cash' | 'settings'
+      step: 'login', // 'login' | 'brand' | 'calc' | 'balloon' | 'cash' | 'pricelist' | 'settings'
       auth: {
         token: '',
         user: null,
@@ -735,7 +776,8 @@
       plans: createDefaultPlans(),
       balloonPlan: createDefaultBalloonPlan(),
       margin: createDefaultMarginState(),
-      deliveryFees: createDefaultDeliveryFees()
+      deliveryFees: createDefaultDeliveryFees(),
+      priceList: createDefaultPriceListState()
     };
 
     const fmt = n => (Number(n) || 0).toLocaleString('th-TH');
@@ -761,7 +803,7 @@
       }, 30);
     }
 
-    // ==================== DEVICE IDENTIFICATION (1 Email / 1 เครื่อง) ====================
+    // ==================== DEVICE IDENTIFICATION (1 Account / 1 เครื่อง) ====================
 
     function initDeviceIdentity() {
       let devId = localStorage.getItem('mb_device_id');
@@ -931,6 +973,7 @@
       state.balloonPlan = createDefaultBalloonPlan();
       state.margin = createDefaultMarginState();
       state.deliveryFees = createDefaultDeliveryFees();
+      state.priceList = createDefaultPriceListState();
     }
 
     function forceKickOutDueToOtherDevice() {
@@ -943,7 +986,7 @@
       state.step = 'login';
       saveAuthSessionToLocal();
       render();
-      alert('⚠️ บัญชีอีเมลนี้ถูกเข้าสู่ระบบจากอุปกรณ์อื่นแล้ว\nระบบจึงออกจากระบบบนอุปกรณ์นี้โดยอัตโนมัติ (จำกัด 1 เครื่องต่อ 1 บัญชี)');
+      alert('⚠️ บัญชีนี้ถูกเข้าสู่ระบบจากอุปกรณ์อื่นแล้ว\nระบบจึงออกจากระบบบนอุปกรณ์นี้โดยอัตโนมัติ (จำกัด 1 เครื่องต่อ 1 บัญชี)');
     }
 
     async function apiFetch(endpoint, options = {}) {
@@ -1072,6 +1115,8 @@
       cp.name = cp.carModel ? `${cp.campaignName} - ${cp.carModel}` : cp.campaignName;
       cp.isEasyPay = Boolean(cp.isEasyPay);
       cp.freeInsurance = Boolean(cp.freeInsurance);
+      cp.minLoanEnabled = Boolean(cp.minLoanEnabled);
+      cp.minLoanAmount = num(cp.minLoanAmount || 0);
       if (cp.balloonPct === undefined) cp.balloonPct = 30;
       if (cp.mgType === undefined) cp.mgType = 'normal';
       if (cp.comPct === undefined) cp.comPct = cp.baseCommPct !== undefined ? num(cp.baseCommPct) : 8;
@@ -1158,9 +1203,10 @@
       return [...seen.values()];
     }
 
-    function getFilteredCampaignsForPlan(financeText, mode = 'standard') {
+    function getFilteredCampaignsForPlan(financeText, mode = 'standard', modelOverride = null) {
       const targetFinKey = getFinanceFolderKey(financeText);
-      const modelKey = getModelFolderKey(state.selectedModel);
+      const targetModel = modelOverride !== null ? modelOverride : state.selectedModel;
+      const modelKey = getModelFolderKey(targetModel);
       const indexed = getCampaignsMatchingBrandAndMode(mode);
       if (indexed.length === 0) return [];
 
@@ -1169,7 +1215,7 @@
         : indexed;
       const basePool = byFinance.length > 0 ? byFinance : indexed;
 
-      if (state.selectedModel && modelKey !== 'UNSPECIFIED_MODEL') {
+      if (targetModel && modelKey !== 'UNSPECIFIED_MODEL') {
         const byModel = basePool.filter(item => {
           const mKey = getModelFolderKey(item.cp.carModel);
           return mKey === 'UNSPECIFIED_MODEL' || mKey.includes(modelKey) || modelKey.includes(mKey);
@@ -1259,6 +1305,7 @@
         const localQuots = localStorage.getItem(getUserStorageKey('multi_brand_quotations'));
         const localPhotos = localStorage.getItem(getUserStorageKey('multi_brand_car_photos'));
         const savedTpl = localStorage.getItem(getUserStorageKey('multi_brand_print_template'));
+        const savedQr = localStorage.getItem(getUserStorageKey('multi_brand_qr_code'));
 
         if (localCars) state.cars = JSON.parse(localCars).map(normalizeCar);
         if (localCamps) state.campaigns = JSON.parse(localCamps).map(normalizeCampaign);
@@ -1266,6 +1313,7 @@
         if (localProfiles) state.brandProfiles = JSON.parse(localProfiles);
         if (localQuots) state.savedQuotations = JSON.parse(localQuots);
         if (localPhotos) state.carModelPhotos = JSON.parse(localPhotos);
+        if (savedQr) state.priceList.qrCodeDataUrl = savedQr;
         if (savedTpl === '2') state.printTemplate = 2;
         else if (savedTpl === '3') state.printTemplate = 3;
         else state.printTemplate = 1;
@@ -1363,8 +1411,13 @@
       localStorage.setItem(getUserStorageKey('multi_brand_print_template'), String(state.printTemplate || 1));
       try {
         localStorage.setItem(getUserStorageKey('multi_brand_car_photos'), JSON.stringify(state.carModelPhotos));
+        if (state.priceList.qrCodeDataUrl) {
+          localStorage.setItem(getUserStorageKey('multi_brand_qr_code'), state.priceList.qrCodeDataUrl);
+        } else {
+          localStorage.removeItem(getUserStorageKey('multi_brand_qr_code'));
+        }
       } catch (e) {
-        console.warn('Car photo storage quota warning:', e);
+        console.warn('Image storage quota warning:', e);
       }
       if (syncProfileToCloud) {
         saveCurrentBrandProfile();
@@ -1383,7 +1436,7 @@
       }
     }
 
-    // ==================== LOGIN, LOGOUT & 1-DEVICE-PER-EMAIL ENFORCEMENT ====================
+    // ==================== LOGIN (รองรับอีเมล หรือ หมายเลขโทรศัพท์), LOGOUT & 1-DEVICE ENFORCEMENT ====================
 
     function renderLoginPage() {
       return `
@@ -1394,13 +1447,13 @@
                 Multi-Showroom FinTech SaaS
               </span>
               <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Multi-Brand Car Finance & Quotation Pro</h1>
-              <p class="text-xs text-slate-400">เข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับจากแอดมิน (ข้อมูลแต่ละบัญชีแยกอิสระ 100%)</p>
+              <p class="text-xs text-slate-400">เข้าสู่ระบบด้วยอีเมลหรือหมายเลขโทรศัพท์ที่ลงทะเบียนไว้ (ข้อมูลแต่ละบัญชีแยกอิสระ 100%)</p>
             </div>
 
             <form onsubmit="handleLoginSubmit(event, false)" class="space-y-4">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1.5">อีเมลผู้ใช้งาน (Email)</label>
-                <input type="email" id="loginEmailInput" required placeholder="name@company.co.th" class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm font-semibold text-white outline-none transition-all">
+                <label class="block text-xs font-semibold text-slate-300 mb-1.5">อีเมลผู้ใช้งาน (Email) หรือ หมายเลขโทรศัพท์</label>
+                <input type="text" id="loginEmailInput" required placeholder="name@company.co.th หรือ 095-635-6394" class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm font-semibold text-white outline-none transition-all">
               </div>
 
               <div>
@@ -1417,7 +1470,7 @@
 
             <div class="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1">
               <div class="font-bold text-slate-300">สิทธิ์การใช้งาน 3 ระดับ:</div>
-              <div>• <strong>ระดับ 1:</strong> เลือกใช้งานได้ 1 แบรนด์ | <strong>ระดับ 2:</strong> เลือกใช้งานได้ 3 แบรนด์ (จำกัด 1 เครื่องต่อ 1 อีเมล)</div>
+              <div>• <strong>ระดับ 1:</strong> เลือกใช้งานได้ 1 แบรนด์ | <strong>ระดับ 2:</strong> เลือกใช้งานได้ 3 แบรนด์ (จำกัด 1 เครื่องต่อ 1 บัญชี)</div>
               <div>• <strong>ระดับ 3 (Super Admin):</strong> ใช้งานได้ทุกแบรนด์ ทุกอุปกรณ์ และจัดการสิทธิ์/คัดลอกข้อมูลให้ผู้ใช้ได้</div>
             </div>
           </div>
@@ -1454,7 +1507,7 @@
         const data = await res.json();
 
         if (res.status === 409 && data.code === 'DEVICE_CONFLICT') {
-          const confirmMsg = "บัญชีอีเมลนี้กำลังใช้งานอยู่บนอุปกรณ์อื่น หากเข้าสู่ระบบบนอุปกรณ์นี้ ระบบจะออกจากระบบบนอุปกรณ์เดิมทันที กด 'ตกลง' เพื่อเข้าสู่ระบบ หรือ 'ยกเลิก'";
+          const confirmMsg = "บัญชีนี้กำลังใช้งานอยู่บนอุปกรณ์อื่น หากเข้าสู่ระบบบนอุปกรณ์นี้ ระบบจะออกจากระบบบนอุปกรณ์เดิมทันที กด 'ตกลง' เพื่อเข้าสู่ระบบ หรือ 'ยกเลิก'";
           if (confirm(confirmMsg)) {
             return await handleLoginSubmit(null, true);
           }
@@ -1463,7 +1516,7 @@
 
         if (!res.ok) {
           if (errBox) {
-            errBox.innerText = data.error || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+            errBox.innerText = data.error || 'อีเมล/เบอร์โทรศัพท์ หรือรหัสผ่านไม่ถูกต้อง';
             errBox.classList.remove('hidden');
           }
           return;
@@ -1779,6 +1832,46 @@
       }
     }
 
+    function initPriceListDefaults() {
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
+      const uniqueModels = [];
+      const seen = new Set();
+      brandCars.forEach(c => {
+        const mKey = getModelFolderKey(c.model);
+        if (!seen.has(mKey)) {
+          seen.add(mKey);
+          uniqueModels.push(formatEPower(c.model));
+        }
+      });
+
+      if (!state.priceList.activeModel || !seen.has(getModelFolderKey(state.priceList.activeModel))) {
+        state.priceList.activeModel = state.selectedModel && seen.has(getModelFolderKey(state.selectedModel))
+          ? state.selectedModel
+          : (uniqueModels[0] || '');
+      }
+
+      // กรอง selectedCarIds ให้เหลือเฉพาะรถในแบรนด์ปัจจุบัน
+      const brandCarIds = new Set(brandCars.map(c => String(c.id)));
+      state.priceList.selectedCarIds = (state.priceList.selectedCarIds || []).filter(id => brandCarIds.has(String(id)));
+
+      // เลือกแคมเปญเริ่มต้นสำหรับใบราคา
+      const stdPool = getFilteredCampaignsForPlan(state.priceList.financeText, 'standard', state.priceList.activeModel);
+      if (state.priceList.campaignIdx < 0 || !state.campaigns[state.priceList.campaignIdx] || state.campaigns[state.priceList.campaignIdx].isEasyPay) {
+        state.priceList.campaignIdx = stdPool.length > 0 ? stdPool[0].index : -1;
+        if (stdPool.length > 0 && !state.priceList.financeText) {
+          state.priceList.financeText = stdPool[0].cp.finance || '';
+        }
+      }
+
+      const easyPool = getFilteredCampaignsForPlan(state.priceList.financeText, 'balloon', state.priceList.activeModel);
+      if (state.priceList.easyPayCampaignIdx >= 0 && (!state.campaigns[state.priceList.easyPayCampaignIdx] || !state.campaigns[state.priceList.easyPayCampaignIdx].isEasyPay)) {
+        state.priceList.easyPayCampaignIdx = -1;
+      }
+      if (state.priceList.easyPayCampaignIdx < 0 && easyPool.length > 0) {
+        state.priceList.easyPayCampaignIdx = easyPool[0].index;
+      }
+    }
+
     function switchMode(newStep) {
       state.step = newStep;
       state.margin.mgTypeOverride = null;
@@ -1790,8 +1883,9 @@
         state.expandedCampaignSubFolders = {};
         state.expandedCarFolders = {};
         state.expandedAccFolders = {};
-      }
-      if (newStep === 'balloon') {
+      } else if (newStep === 'pricelist') {
+        initPriceListDefaults();
+      } else if (newStep === 'balloon') {
         const modelKey = getModelFolderKey(state.selectedModel);
         const easyPool = getCampaignsMatchingBrandAndMode('balloon');
         const matchedEasy = easyPool.find(({ cp }) =>
@@ -1837,12 +1931,14 @@
       } else if (state.step === 'cash') {
         app.innerHTML = renderCashPage();
         calculateCash();
+      } else if (state.step === 'pricelist') {
+        app.innerHTML = renderPriceListPage();
       } else if (state.step === 'settings') {
         app.innerHTML = renderSettings();
       }
     }
 
-    // ==================== HEADER & SHARED VEHICLE FORM (พร้อมปุ่มล้างค่า) ====================
+    // ==================== HEADER & SHARED VEHICLE FORM (เพิ่มเมนู "ทำใบราคา") ====================
 
     function renderTopHeader() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR', img: '' };
@@ -1852,7 +1948,8 @@
       const navItems = [
         { id: 'calc', label: '📋 ผ่อนมาตรฐาน (4 แผน)' },
         { id: 'balloon', label: '🎈 บอลลูน (Balloon)' },
-        { id: 'cash', label: '💵 ซื้อสด (Cash)' }
+        { id: 'cash', label: '💵 ซื้อสด (Cash)' },
+        { id: 'pricelist', label: '🧾 ทำใบราคา' }
       ];
 
       return `
@@ -1873,10 +1970,10 @@
               </div>
             </div>
 
-            <!-- Mode Switcher Tabs -->
-            <div class="flex items-center bg-slate-950/90 p-1 rounded-2xl border border-slate-800 order-3 lg:order-2 w-full lg:w-auto justify-center">
+            <!-- Mode Switcher Tabs (4 เมนู) -->
+            <div class="flex flex-wrap items-center bg-slate-950/90 p-1 rounded-2xl border border-slate-800 order-3 lg:order-2 w-full lg:w-auto justify-center gap-0.5">
               ${navItems.map(item => `
-                <button onclick="switchMode('${item.id}')" class="flex-1 lg:flex-initial px-3 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${state.step === item.id ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'text-slate-400 hover:text-white'}">
+                <button onclick="switchMode('${item.id}')" class="flex-1 lg:flex-initial px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all whitespace-nowrap ${state.step === item.id ? (item.id === 'pricelist' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25' : 'bg-blue-600 text-white shadow-md shadow-blue-600/25') : 'text-slate-400 hover:text-white'}">
                   ${item.label}
                 </button>
               `).join('')}
@@ -2080,7 +2177,7 @@
       `;
     }
 
-    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน — แสดงเฉพาะแคมเปญปกติ ไม่ปน EASY PAY) ====================
+    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน + แจ้งเตือนยอดจัดขั้นต่ำ) ====================
 
     function renderCalculator() {
       const cardColors = [
@@ -2190,6 +2287,12 @@
                           <input type="text" id="plan-${p.id}-downAmt" value="${fmt(p.downAmt)}" oninput="updatePlanDownAmt(${p.id}, this.value)" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                         </div>
 
+                        <!-- แถบแจ้งเตือนยอดจัดต่ำกว่าขั้นต่ำ (ซ่อนอัตโนมัติหากผ่านเงื่อนไขหรือไม่ได้กำหนด) -->
+                        <div id="plan-${p.id}-minLoanWarn" class="hidden sm:col-span-2 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-700 text-xs font-extrabold flex items-center gap-2">
+                          <span>⚠️</span>
+                          <span id="plan-${p.id}-minLoanWarnText"></span>
+                        </div>
+
                         <div class="sm:col-span-2">
                           <div class="flex justify-between items-center mb-1.5">
                             <label class="text-xs font-medium text-slate-500">
@@ -2200,7 +2303,7 @@
                             </label>
                             ${p.customRate !== '' ? `<button type="button" onclick="resetPlanRate(${p.id})" class="text-[11px] text-blue-600 hover:underline font-semibold">↺ คืนค่าตามตาราง</button>` : ''}
                           </div>
-                          <input type="number" id="plan-${p.id}-rateInput" step="0.01" value="${effectiveRate.toFixed(2)}" oninput="updatePlanCustomRate(${p.id}, this.value)" class="w-full bg-blue-50/60 border border-blue-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-blue-800 outline-none">
+                          <input type="number" id="plan-${p.id}-rateInput" step="0.01" value="${effectiveRate.toFixed(2)}" oninput="updatePlanCustomRate(${p.id}, this.value)" class="w-full bg-blue-50/60 border border-blue-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-blue-800 outline-none transition-colors">
                         </div>
 
                         <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
@@ -2301,7 +2404,7 @@
       `;
     }
 
-    // ==================== 2. หน้าคำนวณ BALLOON (แสดงเฉพาะแคมเปญ EASY PAY เท่านั้น) ====================
+    // ==================== 2. หน้าคำนวณ BALLOON (+ แจ้งเตือนยอดจัดขั้นต่ำ) ====================
 
     function renderBalloonPage() {
       const bp = state.balloonPlan;
@@ -2390,6 +2493,12 @@
                     <input type="text" id="balloon-downAmt" value="${fmt(bp.downAmt)}" oninput="updateBalloonDownAmt(this.value)" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                   </div>
 
+                  <!-- แถบแจ้งเตือนยอดจัดขั้นต่ำ (โหมดบอลลูน) -->
+                  <div id="balloon-minLoanWarn" class="hidden sm:col-span-2 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-700 text-xs font-extrabold flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span id="balloon-minLoanWarnText"></span>
+                  </div>
+
                   <div class="sm:col-span-2 p-4 rounded-2xl bg-purple-50/70 border border-purple-200">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
@@ -2410,7 +2519,7 @@
                       <label class="text-xs font-medium text-slate-500">อัตราดอกเบี้ย r (% ต่อปี) <span class="text-purple-600 font-normal">(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)</span></label>
                       ${bp.customRate !== '' ? `<button type="button" onclick="state.balloonPlan.customRate='';render();" class="text-[11px] text-purple-600 hover:underline font-semibold">↺ คืนค่าตามตาราง (${autoRate.toFixed(2)}%)</button>` : ''}
                     </div>
-                    <input type="number" id="balloon-rateInput" step="0.01" value="${Number(displayRate).toFixed(2)}" oninput="updateBalloonCustomRate(this.value)" class="w-full bg-purple-50/40 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-purple-900 outline-none">
+                    <input type="number" id="balloon-rateInput" step="0.01" value="${Number(displayRate).toFixed(2)}" oninput="updateBalloonCustomRate(this.value)" class="w-full bg-purple-50/40 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-purple-900 outline-none transition-colors">
                   </div>
                 </div>
               </div>
@@ -2550,7 +2659,243 @@
       `;
     }
 
-    // ==================== 4. หน้าตั้งค่าระบบ (Settings + แถมประกัน + ประกัน 3 ช่องผูก MG) ====================
+    // ==================== 4. หน้าทำใบราคา (Price List Builder — ตามภาพตัวอย่าง) ====================
+
+    function renderPriceListPage() {
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR' };
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
+      const pl = state.priceList;
+
+      // รวบรวมรายชื่อ Model ในแบรนด์นี้
+      const uniqueModels = [];
+      const modelMap = new Map();
+      brandCars.forEach(c => {
+        const mKey = getModelFolderKey(c.model);
+        if (!modelMap.has(mKey)) {
+          const display = formatEPower(c.model);
+          modelMap.set(mKey, display);
+          uniqueModels.push({ key: mKey, name: display });
+        }
+      });
+
+      const activeModelKey = getModelFolderKey(pl.activeModel);
+      const gradesInActiveModel = pl.activeModel
+        ? brandCars.filter(c => getModelFolderKey(c.model) === activeModelKey)
+        : [];
+
+      const selectedSet = new Set((pl.selectedCarIds || []).map(String));
+      const selectedCars = (pl.selectedCarIds || [])
+        .map(id => brandCars.find(c => String(c.id) === String(id)))
+        .filter(Boolean);
+
+      // คำนวณ % พื้นที่ใบราคา A4 (รองรับ ~5-6 รุ่นย่อยเต็มหน้า A4 พอดี)
+      const spacePct = Math.min(Math.round((selectedCars.length / 5.5) * 100), 100);
+      const spaceBarColor = spacePct > 95 ? 'bg-rose-600' : (spacePct > 75 ? 'bg-amber-500' : 'bg-gradient-to-r from-amber-500 to-rose-600');
+
+      const uniqueFinances = getUniqueFinanceCompanies('standard');
+      const stdCamps = getFilteredCampaignsForPlan(pl.financeText, 'standard', pl.activeModel);
+      const easyCamps = getFilteredCampaignsForPlan(pl.financeText, 'balloon', pl.activeModel);
+
+      return `
+        <div class="min-h-screen flex flex-col bg-slate-100/80">
+          ${renderTopHeader()}
+
+          <main class="flex-1 max-w-6xl w-full mx-auto p-3.5 sm:p-6 space-y-5">
+            <!-- Hero Banner -->
+            <div class="rounded-3xl p-5 sm:p-7 text-white shadow-xl border border-slate-800" style="background: linear-gradient(125deg, #0b1120 0%, #1e1b2e 55%, #3b0d1f 100%);">
+              <div class="text-[11px] font-bold tracking-widest uppercase text-slate-400">PRICE LIST • ${brandObj.name}</div>
+              <h2 class="text-xl sm:text-2xl font-extrabold mt-1">ทำใบราคา</h2>
+              <p class="text-xs sm:text-sm text-slate-300 mt-1">
+                เลือกรถและแบบ/รุ่นได้หลายรายการ ระบบคำนวณตารางผ่อน 48–96 เดือน และ Easy Pay ให้อัตโนมัติ พิมพ์หรือบันทึกรูป PNG/JPG และ PDF ได้ในกระดาษ A4 หน้าเดียว
+              </p>
+            </div>
+
+            <!-- แถบเลือกบริษัทไฟแนนซ์และแคมเปญดอกเบี้ยสำหรับคำนวณใบราคา -->
+            <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 space-y-3">
+              <div class="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800">
+                <span class="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs">🏦</span>
+                เลือกบริษัทไฟแนนซ์และแคมเปญดอกเบี้ย (ใช้คำนวณค่างวดในใบราคา)
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label class="block font-medium text-slate-500 mb-1">บริษัทไฟแนนซ์</label>
+                  <select onchange="onPriceListFinanceChange(this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-rose-500 rounded-xl p-2.5 font-bold text-slate-800 outline-none cursor-pointer">
+                    <option value="">-- ทุกไฟแนนซ์ (เลือกอัตโนมัติ) --</option>
+                    ${uniqueFinances.map(f => `<option value="${f}" ${getFinanceFolderKey(f) === getFinanceFolderKey(pl.financeText) ? 'selected' : ''}>${f}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-500 mb-1">แคมเปญดอกเบี้ย (ผ่อน 48–96 เดือน)</label>
+                  <select onchange="onPriceListCampaignChange(this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-rose-500 rounded-xl p-2.5 font-bold text-slate-800 outline-none cursor-pointer">
+                    <option value="-1">-- เลือกแคมเปญอัตโนมัติตามรุ่นรถ --</option>
+                    ${stdCamps.map(it => `<option value="${it.index}" ${Number(pl.campaignIdx) === it.index ? 'selected' : ''}>${it.cp.finance} • ${getCampaignDisplayLabel(it.cp)}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-500 mb-1">แคมเปญ EASY PAY (คอลัมน์ 1-60 • ถ้ามี)</label>
+                  <select onchange="onPriceListEasyPayChange(this.value)" class="w-full bg-amber-50/70 border border-amber-200 focus:border-amber-500 rounded-xl p-2.5 font-bold text-amber-950 outline-none cursor-pointer">
+                    <option value="-1">ไม่แสดงคอลัมน์ Easy Pay / อัตโนมัติ</option>
+                    ${easyCamps.map(it => `<option value="${it.index}" ${Number(pl.easyPayCampaignIdx) === it.index ? 'selected' : ''}>${it.cp.finance} • ${getCampaignDisplayLabel(it.cp)}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- ส่วนที่ 1 & 2: เลือกรถ (ซ้าย) + เลือกแบบ/รุ่น (ขวา) -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+              <!-- 1. เลือกรถ -->
+              <div class="md:col-span-4 bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 flex flex-col">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-extrabold">1</span>
+                  <h3 class="font-bold text-slate-900 text-sm">เลือกรถ</h3>
+                </div>
+                <div class="space-y-2 max-h-[340px] overflow-y-auto pr-1 flex-1">
+                  ${uniqueModels.length === 0 ? `
+                    <div class="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      ยังไม่มีข้อมูลรุ่นรถในแบรนด์ ${brandObj.name}<br>กรุณาเพิ่มรุ่นรถที่หน้า ⚙️ ตั้งค่า
+                    </div>
+                  ` : uniqueModels.map(m => {
+                    const isActive = m.key === activeModelKey;
+                    const countSelected = brandCars.filter(c => getModelFolderKey(c.model) === m.key && selectedSet.has(String(c.id))).length;
+                    return `
+                      <button type="button" onclick="selectPriceListModel('${m.name}')" class="w-full flex items-center justify-between px-4 py-3 rounded-2xl border text-left text-xs sm:text-sm font-bold transition-all ${isActive ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-800 border-slate-200 hover:border-slate-400 hover:bg-slate-50'}">
+                        <span class="truncate">${m.name}</span>
+                        ${countSelected > 0 ? `<span class="ml-2 w-6 h-6 rounded-full bg-rose-600 text-white text-[11px] font-extrabold flex items-center justify-center shrink-0">${countSelected}</span>` : ''}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <!-- 2. เลือกแบบ/รุ่น -->
+              <div class="md:col-span-8 bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 flex flex-col">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-extrabold">2</span>
+                    <h3 class="font-bold text-slate-900 text-sm">เลือกแบบ/รุ่น</h3>
+                  </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+                  <div class="font-extrabold text-slate-900 text-sm">${formatEPower(pl.activeModel || 'กรุณาเลือกรถด้านซ้าย')}</div>
+                  <div class="flex items-center gap-2">
+                    <button type="button" onclick="selectAllGradesInPriceListModel()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-colors">
+                      เลือกทั้งหมด
+                    </button>
+                    <button type="button" onclick="clearGradesInPriceListModel()" class="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors">
+                      ล้างรุ่นนี้
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  ${gradesInActiveModel.length === 0 ? `
+                    <div class="sm:col-span-3 p-8 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      ไม่พบรุ่นย่อยสำหรับรุ่นที่เลือก
+                    </div>
+                  ` : gradesInActiveModel.map(car => {
+                    const isChecked = selectedSet.has(String(car.id));
+                    return `
+                      <label class="flex items-center justify-between gap-2 p-3 rounded-2xl border-2 cursor-pointer select-none transition-all ${isChecked ? 'bg-rose-50/50 border-rose-400 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300'}">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                          <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="togglePriceListCar('${car.id}')" class="w-4 h-4 accent-rose-600 rounded cursor-pointer shrink-0">
+                          <span class="font-bold text-slate-900 text-xs leading-snug truncate">${formatEPower(car.grade)}</span>
+                        </div>
+                        <span class="font-extrabold text-slate-800 text-xs shrink-0">${fmt(car.price)}</span>
+                      </label>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. รายการที่เลือก -->
+            <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-extrabold">3</span>
+                  <h3 class="font-bold text-slate-900 text-sm">รายการที่เลือก</h3>
+                </div>
+                <span class="text-xs font-bold text-slate-500">${selectedCars.length} รายการ</span>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                ${selectedCars.length === 0 ? `
+                  <span class="text-xs text-slate-400">ยังไม่ได้เลือกรุ่นย่อย (คลิกติ๊กเลือกที่ข้อ 2 ด้านบน)</span>
+                ` : selectedCars.map(car => `
+                  <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800">
+                    <span>${formatEPower(car.model)} · ${formatEPower(car.grade)}</span>
+                    <button type="button" onclick="togglePriceListCar('${car.id}')" class="w-4 h-4 rounded-full bg-slate-300 hover:bg-rose-500 hover:text-white text-slate-700 flex items-center justify-center text-[10px] font-extrabold transition-colors">×</button>
+                  </span>
+                `).join('')}
+              </div>
+
+              <div class="space-y-1 pt-1">
+                <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div class="h-full ${spaceBarColor} transition-all duration-300" style="width: ${spacePct}%;"></div>
+                </div>
+                <div class="text-[11px] text-slate-500 font-medium">
+                  พื้นที่ใบราคา A4 ใช้ไป <strong class="${spacePct > 95 ? 'text-rose-600' : 'text-slate-700'}">${spacePct}%</strong> ${spacePct > 95 ? '(แนะนำไม่เกิน 4–5 รุ่นย่อยต่อ 1 หน้า A4 เพื่อความคมชัด)' : ''}
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. ข้อมูลที่ปรึกษาการขาย + QR Code LINE -->
+            <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-extrabold">4</span>
+                <h3 class="font-bold text-slate-900 text-sm">ข้อมูลที่ปรึกษาการขาย <span class="text-xs font-normal text-slate-400">(ไม่บังคับ)</span></h3>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div class="md:col-span-10 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label class="block font-medium text-slate-500 mb-1">ชื่อที่ปรึกษาการขาย</label>
+                    <input type="text" id="plSalesName" value="${state.sales.name}" oninput="state.sales.name=this.value;saveToStorage(false);" placeholder="ชื่อ-นามสกุล" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none">
+                  </div>
+                  <div>
+                    <label class="block font-medium text-slate-500 mb-1">เบอร์โทร</label>
+                    <input type="text" id="plSalesPhone" value="${state.sales.phone}" oninput="state.sales.phone=this.value;saveToStorage(false);" placeholder="095-635-6394" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none">
+                  </div>
+                  <div>
+                    <label class="block font-medium text-slate-500 mb-1">LINE</label>
+                    <input type="text" id="plSalesLine" value="${state.sales.line}" oninput="state.sales.line=this.value;saveToStorage(false);" placeholder="LINE ID" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 font-semibold text-slate-800 outline-none">
+                  </div>
+                </div>
+
+                <!-- QR Code LINE Upload -->
+                <div class="md:col-span-2 flex flex-col items-center gap-1.5">
+                  <span class="text-[11px] font-bold text-slate-600">QR Code LINE</span>
+                  <input type="file" id="plQrCodeInput" accept="image/*" class="hidden" onchange="handlePriceListQrUpload(event)">
+                  <div onclick="document.getElementById('plQrCodeInput').click()" class="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 hover:border-rose-500 bg-slate-50 flex items-center justify-center cursor-pointer overflow-hidden p-1 transition-colors" title="คลิกเพื่อแนบรูป QR Code LINE">
+                    ${pl.qrCodeDataUrl
+                      ? `<img src="${pl.qrCodeDataUrl}" alt="QR LINE" style="max-width:100%;max-height:100%;width:auto;height:auto;">`
+                      : `<span class="text-[10px] text-slate-400 text-center font-semibold leading-tight">+ แนบรูป<br>QR LINE</span>`}
+                  </div>
+                  ${pl.qrCodeDataUrl ? `
+                    <button type="button" onclick="removePriceListQrCode()" class="px-3 py-1 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 rounded-lg text-[11px] font-bold transition-colors">
+                      ลบรูป
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+            </div>
+
+            <!-- ปุ่มด้านล่าง: ล้างที่เลือก | สร้างใบราคา -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-6">
+              <button type="button" onclick="clearAllPriceListSelection()" class="py-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-2xl font-extrabold text-sm shadow-sm transition-all">
+                ล้างที่เลือก
+              </button>
+              <button type="button" onclick="generateAndPreviewPriceList()" class="py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-extrabold text-sm shadow-lg shadow-rose-600/25 transition-all">
+                สร้างใบราคา
+              </button>
+            </div>
+          </main>
+        </div>
+      `;
+    }
+
+    // ==================== 5. หน้าตั้งค่าระบบ (Settings + แถมประกัน + ยอดสินเชื่อต้องไม่ต่ำกว่า + ประกัน 3 ช่อง) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
@@ -2586,6 +2931,8 @@
 
       const isEasyPayChecked = editingCamp && editingCamp.isEasyPay ? true : false;
       const isFreeInsChecked = editingCamp && editingCamp.freeInsurance ? true : false;
+      const isMinLoanChecked = editingCamp && editingCamp.minLoanEnabled ? true : false;
+      const minLoanVal = editingCamp && editingCamp.minLoanAmount ? editingCamp.minLoanAmount : '';
       const specialDownVal = editingCamp && editingCamp.specialDownLabel !== undefined ? editingCamp.specialDownLabel : '-';
       const campMgType = editingCamp && editingCamp.mgType ? editingCamp.mgType : 'normal';
       const campComPct = editingCamp && editingCamp.comPct !== undefined ? editingCamp.comPct : 8;
@@ -2672,7 +3019,7 @@
 
           <main class="max-w-5xl w-full mx-auto p-3.5 sm:p-6 space-y-6">
 
-            <!-- 0. กล่องจัดการนำเข้า / ส่งออกไฟล์ Excel (.xlsx 3 Sheets) และ CSV ประจำแบรนด์ -->
+            <!-- 0. กล่องจัดการนำเข้า / ส่งออกไฟล์ Excel (.xlsx 3 Sheets) และ CSV -->
             <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-slate-700/80 space-y-4">
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="space-y-1">
@@ -2732,7 +3079,7 @@
               </div>
             </div>
 
-            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (พร้อม Checkbox ประกันภัยชั้น 1: ไม่แถม / แถม) -->
+            <!-- 2. จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="campaignFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
@@ -2750,7 +3097,6 @@
                 </div>
               </div>
 
-              <!-- แถวบน: บริษัทไฟแนนซ์ | ชื่อแคมเปญ | ชื่อรุ่นรถ | รูปแบบ MG | ประกันภัยชั้น 1 (ไม่แถม / แถม) -->
               <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
                 <div class="sm:col-span-3">
                   <label class="block text-xs font-medium text-slate-500 mb-1">บริษัทไฟแนนซ์</label>
@@ -2933,7 +3279,15 @@
 
               <p class="text-[11px] text-slate-500 mt-1">* คำแนะนำแถวล่างสุด: พิมพ์ <strong>0%</strong> หรือพิมพ์ยอดเงินดาวน์เริ่มต้น เช่น <strong>5555</strong> หรือ <strong>19999</strong> (หากไฟแนนซ์นั้นไม่มีเรทดาวน์ต่ำกว่า 5% ให้ใส่ <strong>-</strong> ทั้งแถว)</p>
 
-              <div class="flex justify-end pt-2">
+              <!-- ช่องกำหนด "ยอดสินเชื่อต้องไม่ต่ำกว่า" + ปุ่มบันทึกแคมเปญ -->
+              <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2">
+                <div class="flex items-center gap-2.5">
+                  <input type="checkbox" id="chkMinLoanEnabled" ${isMinLoanChecked ? 'checked' : ''} class="w-4 h-4 accent-rose-600 rounded cursor-pointer mt-4">
+                  <div>
+                    <label for="chkMinLoanEnabled" class="block text-xs font-extrabold text-rose-700 mb-1 cursor-pointer">ยอดสินเชื่อต้องไม่ต่ำกว่า (บาท)</label>
+                    <input type="number" id="campaignMinLoanAmountInput" value="${minLoanVal}" placeholder="เช่น 580000 (เว้นว่าง = ไม่แจ้งเตือน)" class="w-56 bg-rose-50/40 border-2 border-rose-200 focus:border-rose-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-sm font-extrabold text-rose-800 outline-none">
+                  </div>
+                </div>
                 <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all">
                   ${editingCamp ? '💾 บันทึกการแก้ไขแคมเปญ' : '💾 บันทึกแคมเปญและเรทดอกเบี้ยใหม่'}
                 </button>
@@ -3010,6 +3364,7 @@
                                           <span class="font-extrabold text-indigo-700 text-xs sm:text-sm">🚗 รุ่น: ${formatEPower(cp.carModel || 'ทุกรุ่น')}</span>
                                           ${cp.isEasyPay ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">🎈 EASY PAY (${cp.balloonPct}%)</span>` : ''}
                                           ${cp.freeInsurance ? `<span class="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">✓ แถมประกัน</span>` : ''}
+                                          ${cp.minLoanEnabled && cp.minLoanAmount > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px]">ขั้นต่ำ ${fmt(cp.minLoanAmount)}฿</span>` : ''}
                                         </div>
                                         <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
                                           <span class="text-emerald-600 font-semibold">${termRangeLabel}</span>
@@ -3040,7 +3395,7 @@
               </div>
             </div>
 
-            <!-- 3. จัดการรุ่นรถและสีตัวถัง (เพิ่มค่าประกันภัยชั้น 1 เป็น 3 ช่องผูกคู่กับ MG ทั้ง 3 รูปแบบ) -->
+            <!-- 3. จัดการรุ่นรถและสีตัวถัง (MG 3 รูปแบบ + ค่าประกัน 3 ช่อง) -->
             <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4" id="carFormSection">
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <h3 class="font-bold text-slate-800 text-base">🚗 จัดการรุ่นรถและสีตัวถัง (${brandObj.name})</h3>
@@ -3085,10 +3440,8 @@
                   <button type="button" onclick="addColorRow()" class="text-xs text-blue-600 font-bold hover:underline mt-2.5 inline-block">+ เพิ่มตัวเลือกสีรถ</button>
                 </div>
 
-                <!-- MG 3 รูปแบบ + ค่าประกันภัยชั้น 1 (3 ช่องเชื่อมโยงกับแต่ละ MG) -->
                 <div class="pt-3 border-t border-slate-100 space-y-3">
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <!-- ชุดที่ 1: MG ปกติ + ประกันภัยชั้น 1 -->
                     <div class="p-3 rounded-2xl bg-emerald-50/40 border border-emerald-200/80 space-y-2.5">
                       <div>
                         <label class="block text-xs font-bold text-emerald-700 mb-1">1. MG ปกติ (บาท)</label>
@@ -3100,7 +3453,6 @@
                       </div>
                     </div>
 
-                    <!-- ชุดที่ 2: MG พิเศษ + ประกันภัยชั้น 1 -->
                     <div class="p-3 rounded-2xl bg-sky-50/40 border border-sky-200/80 space-y-2.5">
                       <div>
                         <label class="block text-xs font-bold text-sky-700 mb-1">2. MG พิเศษ (บาท)</label>
@@ -3112,7 +3464,6 @@
                       </div>
                     </div>
 
-                    <!-- ชุดที่ 3: MG other-ซื้อสด + ประกันภัยชั้น 1 -->
                     <div class="p-3 rounded-2xl bg-amber-50/40 border border-amber-200/80 space-y-2.5">
                       <div>
                         <label class="block text-xs font-bold text-amber-700 mb-1">3. MG other-ซื้อสด (บาท)</label>
@@ -3454,7 +3805,6 @@
       const stdPool = getCampaignsMatchingBrandAndMode('standard');
       const easyPool = getCampaignsMatchingBrandAndMode('balloon');
 
-      // 1. จับคู่เฉพาะแคมเปญปกติสำหรับหน้าผ่อนมาตรฐาน (4 แผน)
       let matchedStd = null;
       if (state.selectedModel && targetModelKey !== 'UNSPECIFIED_MODEL') {
         matchedStd = stdPool.find(({ cp }) => getModelFolderKey(cp.carModel || cp.name).includes(targetModelKey)) || stdPool[0] || null;
@@ -3477,7 +3827,6 @@
         }
       });
 
-      // 2. จับคู่เฉพาะแคมเปญ EASY PAY สำหรับหน้าบอลลูน (Balloon)
       let matchedEasy = null;
       if (state.selectedModel && targetModelKey !== 'UNSPECIFIED_MODEL') {
         matchedEasy = easyPool.find(({ cp }) => getModelFolderKey(cp.carModel || cp.name).includes(targetModelKey)) || easyPool[0] || null;
@@ -3552,6 +3901,11 @@
       state.selectedCarId = null;
       state.plans = createDefaultPlans();
       state.balloonPlan = createDefaultBalloonPlan();
+      state.priceList.activeModel = '';
+      state.priceList.selectedCarIds = [];
+      state.priceList.financeText = '';
+      state.priceList.campaignIdx = -1;
+      state.priceList.easyPayCampaignIdx = -1;
       initBrandSelectionDefaults();
       render();
 
@@ -3641,6 +3995,22 @@
       const priceNoAcc = getPriceWithoutAccessories();
       const accessories = num(document.getElementById('accessories')?.value ?? state.accessories);
       return Math.max(priceNoAcc + accessories, 0);
+    }
+
+    // ==================== MIN LOAN VALIDATION HELPER ====================
+
+    function getMinLoanWarningMessage(cp, financeAmt, netPrice) {
+      if (!cp || !cp.minLoanEnabled || num(cp.minLoanAmount) <= 0) return '';
+      if (netPrice <= 0) return '';
+      const minAmt = num(cp.minLoanAmount);
+      if (financeAmt < minAmt) {
+        if (cp.freeInsurance) {
+          return `ดอกเบี้ยแถมประกัน ยอดจัดต้องไม่ต่ำกว่า ${fmt(minAmt)} บาท`;
+        }
+        const label = cp.campaignName || cp.name || 'แคมเปญนี้';
+        return `${label} ยอดจัดต้องไม่ต่ำกว่า ${fmt(minAmt)} บาท`;
+      }
+      return '';
     }
 
     // ==================== INTEREST RATE & EASY PAY COLUMN LOOKUP ENGINE ====================
@@ -3963,7 +4333,7 @@
       }
     }
 
-    // ==================== HANDLERS: 4 STANDARD PLANS ====================
+    // ==================== HANDLERS: 4 STANDARD PLANS (+ MIN LOAN WARNING & RED RATE INPUT) ====================
 
     function togglePlan(planId) {
       const plan = state.plans.find(p => p.id === planId);
@@ -4192,6 +4562,27 @@
 
       state.plans.forEach(p => {
         const m = computePlanMetrics(p, netPrice);
+        const cp = p.campaignIdx >= 0 ? state.campaigns[p.campaignIdx] : null;
+        const warnMsg = getMinLoanWarningMessage(cp, m.finance, netPrice);
+
+        const warnBox = document.getElementById(`plan-${p.id}-minLoanWarn`);
+        const warnText = document.getElementById(`plan-${p.id}-minLoanWarnText`);
+        const rateInput = document.getElementById(`plan-${p.id}-rateInput`);
+        if (warnBox && warnText) {
+          if (warnMsg) {
+            warnText.innerText = warnMsg;
+            warnBox.classList.remove('hidden');
+            if (rateInput) {
+              rateInput.className = 'w-full bg-rose-50 border-2 border-rose-400 focus:border-rose-600 focus:bg-white rounded-xl p-3 text-sm font-extrabold text-rose-700 outline-none transition-colors';
+            }
+          } else {
+            warnBox.classList.add('hidden');
+            if (rateInput) {
+              rateInput.className = 'w-full bg-blue-50/60 border border-blue-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-blue-800 outline-none transition-colors';
+            }
+          }
+        }
+
         const rateSpan = document.getElementById(`sidebar-rate-${p.id}`);
         const downPctSpan = document.getElementById(`sidebar-downpct-${p.id}`);
         const downSpan = document.getElementById(`sidebar-down-${p.id}`);
@@ -4227,7 +4618,7 @@
       });
     }
 
-    // ==================== HANDLERS & FORMULA: BALLOON (EASY PAY 60 เดือน) ====================
+    // ==================== HANDLERS & FORMULA: BALLOON (+ MIN LOAN WARNING) ====================
 
     function selectBalloonFinanceCompany(financeName) {
       const bp = state.balloonPlan;
@@ -4403,6 +4794,26 @@
 
     function calculateBalloon() {
       const b = computeBalloonDetails();
+      const cp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
+      const warnMsg = getMinLoanWarningMessage(cp, b.financeMain, b.priceWithAcc);
+
+      const warnBox = document.getElementById('balloon-minLoanWarn');
+      const warnText = document.getElementById('balloon-minLoanWarnText');
+      const rateInput = document.getElementById('balloon-rateInput');
+      if (warnBox && warnText) {
+        if (warnMsg) {
+          warnText.innerText = warnMsg;
+          warnBox.classList.remove('hidden');
+          if (rateInput) {
+            rateInput.className = 'w-full bg-rose-50 border-2 border-rose-400 focus:border-rose-600 focus:bg-white rounded-xl p-3 text-sm font-extrabold text-rose-700 outline-none transition-colors';
+          }
+        } else {
+          warnBox.classList.add('hidden');
+          if (rateInput) {
+            rateInput.className = 'w-full bg-purple-50/40 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-purple-900 outline-none transition-colors';
+          }
+        }
+      }
 
       if (document.getElementById('resPriceNoAccBanner')) document.getElementById('resPriceNoAccBanner').innerText = fmt(b.priceNoAcc) + ' ฿';
       if (document.getElementById('resNetPriceFull')) document.getElementById('resNetPriceFull').innerText = fmt(b.priceWithAcc) + ' ฿';
@@ -4474,6 +4885,406 @@
       if (document.getElementById('cashResDiscount')) document.getElementById('cashResDiscount').innerText = '-' + fmt(discount) + ' ฿';
       if (document.getElementById('cashResAcc')) document.getElementById('cashResAcc').innerText = '+' + fmt(accessories) + ' ฿';
       if (document.getElementById('cashResNetTotal')) document.getElementById('cashResNetTotal').innerText = fmt(netTotal) + ' ฿';
+    }
+
+    // ==================== PRICE LIST (ทำใบราคา) HANDLERS & A4 TABLE GENERATOR ====================
+
+    function selectPriceListModel(modelName) {
+      state.priceList.activeModel = formatEPower(modelName);
+      // อัปเดตแคมเปญให้ตรงรุ่นอัตโนมัติถ้ายังไม่ได้เลือกเฉพาะเจาะจง
+      const stdPool = getFilteredCampaignsForPlan(state.priceList.financeText, 'standard', state.priceList.activeModel);
+      if (stdPool.length > 0) state.priceList.campaignIdx = stdPool[0].index;
+      const easyPool = getFilteredCampaignsForPlan(state.priceList.financeText, 'balloon', state.priceList.activeModel);
+      state.priceList.easyPayCampaignIdx = easyPool.length > 0 ? easyPool[0].index : -1;
+      render();
+    }
+
+    function togglePriceListCar(carId) {
+      const idStr = String(carId);
+      const list = (state.priceList.selectedCarIds || []).map(String);
+      const idx = list.indexOf(idStr);
+      if (idx !== -1) list.splice(idx, 1);
+      else list.push(idStr);
+      state.priceList.selectedCarIds = list;
+      render();
+    }
+
+    function selectAllGradesInPriceListModel() {
+      const activeKey = getModelFolderKey(state.priceList.activeModel);
+      const grades = state.cars.filter(c => c.brand === state.selectedBrand && getModelFolderKey(c.model) === activeKey);
+      const set = new Set((state.priceList.selectedCarIds || []).map(String));
+      grades.forEach(g => set.add(String(g.id)));
+      state.priceList.selectedCarIds = [...set];
+      render();
+    }
+
+    function clearGradesInPriceListModel() {
+      const activeKey = getModelFolderKey(state.priceList.activeModel);
+      const gradeIds = new Set(
+        state.cars.filter(c => c.brand === state.selectedBrand && getModelFolderKey(c.model) === activeKey).map(g => String(g.id))
+      );
+      state.priceList.selectedCarIds = (state.priceList.selectedCarIds || []).filter(id => !gradeIds.has(String(id)));
+      render();
+    }
+
+    function clearAllPriceListSelection() {
+      state.priceList.selectedCarIds = [];
+      render();
+    }
+
+    function onPriceListFinanceChange(finName) {
+      state.priceList.financeText = finName;
+      const stdPool = getFilteredCampaignsForPlan(finName, 'standard', state.priceList.activeModel);
+      state.priceList.campaignIdx = stdPool.length > 0 ? stdPool[0].index : -1;
+      const easyPool = getFilteredCampaignsForPlan(finName, 'balloon', state.priceList.activeModel);
+      state.priceList.easyPayCampaignIdx = easyPool.length > 0 ? easyPool[0].index : -1;
+      render();
+    }
+
+    function onPriceListCampaignChange(val) {
+      state.priceList.campaignIdx = parseInt(val, 10);
+      render();
+    }
+
+    function onPriceListEasyPayChange(val) {
+      state.priceList.easyPayCampaignIdx = parseInt(val, 10);
+      render();
+    }
+
+    function handlePriceListQrUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const maxSize = 360;
+          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          state.priceList.qrCodeDataUrl = canvas.toDataURL('image/png');
+          saveToStorage(false);
+          render();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function removePriceListQrCode() {
+      state.priceList.qrCodeDataUrl = '';
+      saveToStorage(false);
+      render();
+    }
+
+    function resolveCampaignForPriceListModel(modelName, isEasyPay = false) {
+      const pl = state.priceList;
+      if (!isEasyPay && pl.campaignIdx >= 0 && state.campaigns[pl.campaignIdx] && !state.campaigns[pl.campaignIdx].isEasyPay) {
+        return state.campaigns[pl.campaignIdx];
+      }
+      if (isEasyPay && pl.easyPayCampaignIdx >= 0 && state.campaigns[pl.easyPayCampaignIdx] && state.campaigns[pl.easyPayCampaignIdx].isEasyPay) {
+        return state.campaigns[pl.easyPayCampaignIdx];
+      }
+      const pool = getFilteredCampaignsForPlan(pl.financeText, isEasyPay ? 'balloon' : 'standard', modelName);
+      return pool.length > 0 ? pool[0].cp : null;
+    }
+
+    function buildPriceListHtml() {
+      const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR' };
+      const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
+      const selectedCars = (state.priceList.selectedCarIds || [])
+        .map(id => brandCars.find(c => String(c.id) === String(id)))
+        .filter(Boolean);
+
+      // จัดกลุ่มรถที่เลือกตาม Model
+      const grouped = [];
+      const groupMap = new Map();
+      selectedCars.forEach(car => {
+        const mKey = getModelFolderKey(car.model);
+        if (!groupMap.has(mKey)) {
+          const g = { modelName: formatEPower(car.model), cars: [] };
+          groupMap.set(mKey, g);
+          grouped.push(g);
+        }
+        groupMap.get(mKey).cars.push(car);
+      });
+
+      // ตรวจสอบคอลัมน์งวดผ่อน (48, 60, 72, 84 และเพิ่ม 96 หากมีเรทในแคมเปญ)
+      let has96 = false;
+      let hasAnyEasyPay = false;
+      let mainCampaignHeader = 'ดอกเบี้ยพิเศษ';
+
+      grouped.forEach(g => {
+        const stdCp = resolveCampaignForPriceListModel(g.modelName, false);
+        const easyCp = resolveCampaignForPriceListModel(g.modelName, true);
+        if (stdCp) {
+          if (stdCp.campaignName) mainCampaignHeader = stdCp.campaignName;
+          const allTiers = [...DOWN_TIERS, 0];
+          if (allTiers.some(d => stdCp.rates?.[d]?.[96] !== null && stdCp.rates?.[d]?.[96] !== undefined && stdCp.rates?.[d]?.[96] !== '-')) {
+            has96 = true;
+          }
+        }
+        if (easyCp) hasAnyEasyPay = true;
+      });
+
+      const terms = has96 ? [48, 60, 72, 84, 96] : [48, 60, 72, 84];
+      const totalCols = 4 + terms.length + (hasAnyEasyPay ? 1 : 0);
+      const compactMode = selectedCars.length >= 4;
+      const cellPy = compactMode ? 'py-1' : 'py-1.5';
+      const fontSizeClass = compactMode ? 'text-[10px]' : 'text-[11px]';
+
+      const bodyRowsHtml = grouped.map(g => {
+        const stdCp = resolveCampaignForPriceListModel(g.modelName, false);
+        const easyCp = resolveCampaignForPriceListModel(g.modelName, true);
+        const hasSpecial = hasValidSpecialDownRow(stdCp);
+        const specialLbl = stdCp ? String(stdCp.specialDownLabel || '').trim() : '';
+
+        const downRowsSpec = [];
+        if (hasSpecial) {
+          downRowsSpec.push({ isSpecial: true, tier: 0, label: 'เริ่มต้น', rawSpecial: specialLbl });
+        }
+        [5, 10, 15, 20, 25].forEach(d => {
+          downRowsSpec.push({ isSpecial: false, tier: d, label: `${d}%` });
+        });
+
+        const modelHeaderRow = `
+          <tr style="background-color: #9e0028; color: #ffffff;">
+            <td colspan="${totalCols}" class="py-1.5 px-3 font-extrabold text-xs tracking-wide uppercase">${g.modelName}</td>
+          </tr>
+        `;
+
+        const carBlocksHtml = g.cars.map((car, carIdx) => {
+          const price = num(car.price);
+          const rowCount = downRowsSpec.length;
+          const gradeParts = formatEPower(car.grade).split('(');
+          const mainGrade = gradeParts[0].trim();
+          const subGrade = gradeParts.length > 1 ? '(' + gradeParts.slice(1).join('(') : '';
+
+          return downRowsSpec.map((dr, rIdx) => {
+            let downAmt = 0;
+            if (dr.isSpecial) {
+              if (dr.rawSpecial.includes('%') || num(dr.rawSpecial) === 0) {
+                downAmt = Math.round(price * (num(dr.rawSpecial) / 100));
+              } else {
+                downAmt = num(dr.rawSpecial);
+              }
+            } else {
+              downAmt = Math.round(price * (dr.tier / 100));
+            }
+            const finance = Math.max(price - downAmt, 0);
+
+            const termCellsHtml = terms.map(m => {
+              const rateRaw = stdCp?.rates?.[dr.tier]?.[m];
+              const rateVal = (rateRaw !== null && rateRaw !== undefined && rateRaw !== '-' && rateRaw !== '') ? parseFloat(rateRaw) : NaN;
+              if (isNaN(rateVal) || finance <= 0) {
+                return `<td class="${cellPy} px-1.5 text-center text-slate-400 border-b border-slate-100">—</td>`;
+              }
+              const rDec = rateVal / 100;
+              const rawMonthly = (finance + (finance * rDec * (m / 12))) / m;
+              const monthly = Math.ceil(Number(rawMonthly.toFixed(6)) - 1e-9);
+              return `<td class="${cellPy} px-1.5 text-center font-bold text-slate-900 border-b border-slate-100">${fmt(monthly)}</td>`;
+            }).join('');
+
+            let easyCellHtml = '';
+            if (hasAnyEasyPay) {
+              let easyValStr = '—';
+              if (easyCp && easyCp.easyRates) {
+                const easyRow = easyCp.easyRates[dr.tier];
+                const rawEasyRate = easyRow ? (easyRow.col1 ?? easyRow.col2) : null;
+                const easyRate = (rawEasyRate !== null && rawEasyRate !== undefined && rawEasyRate !== '-' && rawEasyRate !== '') ? parseFloat(rawEasyRate) : NaN;
+                if (!isNaN(easyRate) && finance > 0) {
+                  const balloonPct = num(easyCp.balloonPct) || 30;
+                  const balloonAmt = Math.round(price * (balloonPct / 100));
+                  const rDec = easyRate / 100;
+                  const rawBalMonthly = (((60 + 1) / 12) * finance * rDec + (finance - balloonAmt)) / 60;
+                  if (rawBalMonthly > 0 && balloonAmt < finance) {
+                    easyValStr = fmt(Math.ceil(rawBalMonthly));
+                  }
+                }
+              }
+              easyCellHtml = `<td class="${cellPy} px-1.5 text-center font-extrabold ${easyValStr === '—' ? 'text-amber-700/40' : 'text-slate-900'} border-b border-amber-100/80" style="background-color: #fef9e7;">${easyValStr}</td>`;
+            }
+
+            const isLastRowOfCar = rIdx === rowCount - 1;
+            const rowBorderClass = isLastRowOfCar ? 'border-b-2 border-slate-300' : '';
+
+            return `
+              <tr class="${rowBorderClass} ${rIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'}">
+                ${rIdx === 0 ? `
+                  <td rowspan="${rowCount}" class="px-2.5 py-2 align-middle text-left font-extrabold text-slate-900 border-r border-slate-200 border-b-2 border-b-slate-300 bg-white">
+                    <div class="leading-tight">${mainGrade}</div>
+                    ${subGrade ? `<div class="text-[9px] font-medium text-slate-500 mt-0.5">${subGrade}</div>` : ''}
+                  </td>
+                  <td rowspan="${rowCount}" class="px-2 py-2 align-middle text-center font-extrabold text-slate-900 border-r border-slate-200 border-b-2 border-b-slate-300 bg-white">
+                    ${fmt(price)}
+                  </td>
+                ` : ''}
+                <td class="${cellPy} px-1.5 text-center border-b border-slate-100">
+                  ${dr.isSpecial
+                    ? `<span class="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-[9px]">${dr.label}</span>`
+                    : `<span class="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[9.5px]">${dr.label}</span>`}
+                </td>
+                <td class="${cellPy} px-2 text-right font-semibold text-slate-700 border-r border-slate-200 border-b border-slate-100">${fmt(downAmt)}</td>
+                ${termCellsHtml}
+                ${easyCellHtml}
+              </tr>
+            `;
+          }).join('');
+        }).join('');
+
+        return modelHeaderRow + carBlocksHtml;
+      }).join('');
+
+      const salesName = state.sales.name || '';
+      const salesPhone = state.sales.phone || '';
+      const salesLine = state.sales.line || '';
+      const contactLine = [salesPhone ? `โทร ${salesPhone}` : '', salesLine ? `LINE ${salesLine}` : ''].filter(Boolean).join(' · ');
+      const qrSrc = state.priceList.qrCodeDataUrl || '';
+
+      return `
+        <div class="bg-white text-slate-900 font-sans">
+          <!-- หัวกระดาษแบบแถบมืดหรูหรา + ป้ายแบรนด์สีแดง + ข้อมูลผู้ขาย + QR Code LINE -->
+          <div class="rounded-2xl px-4 py-3 mb-2.5 flex items-center justify-between gap-3 text-white shadow-sm" style="background: linear-gradient(115deg, #0b1120 0%, #16182c 62%, #3a0d1d 100%);">
+            <div class="flex items-center gap-3">
+              <div class="px-3.5 py-2 rounded-xl font-extrabold text-xs tracking-widest uppercase text-white shrink-0" style="background-color: #c8102e;">
+                ${brandObj.name}
+              </div>
+              <div>
+                <div class="text-base sm:text-lg font-extrabold tracking-tight leading-tight">ใบราคาและตารางผ่อนชำระ</div>
+                <div class="text-[9.5px] font-semibold tracking-widest uppercase text-slate-300 mt-0.5">PRICE LIST & INSTALLMENT PLAN</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 text-right">
+              <div>
+                ${salesName ? `<div class="text-xs font-extrabold text-white">${salesName}</div>` : ''}
+                ${contactLine ? `<div class="text-[10px] text-slate-300 font-medium mt-0.5">${contactLine}</div>` : ''}
+              </div>
+              ${qrSrc ? `
+                <div class="w-12 h-12 rounded-xl bg-white p-1 flex items-center justify-center shrink-0">
+                  <img src="${qrSrc}" alt="QR LINE" style="max-width:100%;max-height:100%;width:auto;height:auto;">
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="text-[10px] text-slate-500 font-medium mb-2 px-1">
+            ค่างวดต่อเดือน (บาท) · ตัวเลขหัวตาราง = จำนวนงวด (เดือน)
+          </div>
+
+          <!-- ตารางใบราคา -->
+          <div class="rounded-2xl overflow-hidden border border-slate-300 shadow-2xs">
+            <table class="w-full border-collapse ${fontSizeClass}">
+              <thead>
+                <tr class="bg-slate-900 text-white font-bold">
+                  <th rowspan="2" class="py-2 px-2.5 text-left border-r border-slate-700 w-32">แบบ/รุ่น</th>
+                  <th rowspan="2" class="py-2 px-2 text-center border-r border-slate-700 w-20">ราคาขาย</th>
+                  <th colspan="2" class="py-1.5 px-2 text-center border-r border-slate-700 border-b border-slate-700">ดาวน์</th>
+                  <th colspan="${terms.length}" class="py-1.5 px-2 text-center border-b border-slate-700 ${hasAnyEasyPay ? 'border-r border-slate-700' : ''}">${mainCampaignHeader}</th>
+                  ${hasAnyEasyPay ? `
+                    <th class="py-1.5 px-2 text-center font-extrabold text-white border-b border-amber-600/40" style="background-color: #b48a2c;">
+                      ${brandObj.name} EASY PAY
+                    </th>
+                  ` : ''}
+                </tr>
+                <tr class="bg-slate-800 text-slate-200 font-bold text-[10px]">
+                  <th class="py-1 px-1.5 text-center w-12">%</th>
+                  <th class="py-1 px-2 text-right border-r border-slate-700 w-20">ดาวน์</th>
+                  ${terms.map(m => `<th class="py-1 px-1.5 text-center">${m}</th>`).join('')}
+                  ${hasAnyEasyPay ? `<th class="py-1 px-1.5 text-center font-extrabold text-amber-950" style="background-color: #f4df9d;">1-60</th>` : ''}
+                </tr>
+              </thead>
+              <tbody>
+                ${bodyRowsHtml}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- ท้ายกระดาษ -->
+          <div class="flex justify-between items-center text-[9px] text-slate-400 mt-3 pt-2 border-t border-slate-200 px-1">
+            <span>ราคาและเงื่อนไขอาจเปลี่ยนแปลงโดยไม่ต้องแจ้งล่วงหน้า</span>
+            <span>"—" = ไม่มีโปรแกรมในเงื่อนไขนี้</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function generateAndPreviewPriceList() {
+      const selectedIds = state.priceList.selectedCarIds || [];
+      if (selectedIds.length === 0) {
+        alert('กรุณาเลือกรุ่นย่อยอย่างน้อย 1 รายการก่อนสร้างใบราคา');
+        return;
+      }
+      const html = buildPriceListHtml();
+      const stage = document.getElementById('priceListPreviewStage');
+      if (stage) stage.innerHTML = html;
+      document.getElementById('priceListPreviewModal')?.classList.remove('hidden');
+    }
+
+    function closePriceListPreviewModal() {
+      document.getElementById('priceListPreviewModal')?.classList.add('hidden');
+    }
+
+    function printPriceListPdf() {
+      const html = buildPriceListHtml();
+      const printAreaEl = document.getElementById('printArea');
+      if (printAreaEl) printAreaEl.innerHTML = html;
+      closePriceListPreviewModal();
+      setTimeout(() => { window.print(); }, 250);
+    }
+
+    async function exportPriceListAsImage(format = 'png') {
+      if (typeof html2canvas === 'undefined') {
+        alert('กำลังโหลดไลบรารีแปลงรูปภาพ กรุณารอสักครู่แล้วลองใหม่');
+        return;
+      }
+      const overlay = document.getElementById('imageCaptureOverlay');
+      if (overlay) overlay.classList.remove('hidden');
+
+      const printAreaEl = document.getElementById('printArea');
+      try {
+        const html = buildPriceListHtml();
+        printAreaEl.innerHTML = html;
+        printAreaEl.classList.remove('print-only');
+        printAreaEl.classList.add('capture-render-mode');
+
+        await new Promise(r => setTimeout(r, 350));
+
+        const canvas = await html2canvas(printAreaEl, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          width: 794,
+          windowWidth: 1024,
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+        const dataUrl = canvas.toDataURL(mimeType, 0.95);
+        const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { name: 'CAR' };
+        const dateTag = new Date().toISOString().slice(0, 10);
+        const link = document.createElement('a');
+        link.download = `PriceList_${brandObj.name}_${dateTag}.${format}`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (err) {
+        console.error('PriceList Export Error:', err);
+        alert('❌ ไม่สามารถสร้างไฟล์รูปภาพได้ กรุณาลองอีกครั้งหรือใช้ปุ่ม "พิมพ์ / PDF (A4)"');
+      } finally {
+        printAreaEl.classList.remove('capture-render-mode');
+        printAreaEl.classList.add('print-only');
+        if (overlay) overlay.classList.add('hidden');
+      }
     }
 
     // ==================== MARGIN & COMMISSION POPUP ENGINE (ฝั่งเซลล์ + Drop-down สลับ MG & ค่าประกัน) ====================
@@ -6125,7 +6936,6 @@
 
       return `
         <div class="rounded-2xl overflow-hidden border border-[#dfd6be] bg-[#fcfbf7] text-slate-900">
-          <!-- ส่วนหัวแบนเนอร์หรูหราพร้อมโลโก้ ชื่อบริษัท หัวข้อภาษาไทย และรูปรถเต็มคันบนพื้นหลังสีขาว -->
           <div class="relative p-4 pb-3 border-b border-[#e5dec9]" style="background: linear-gradient(115deg, #ffffff 0%, #f8f5ec 52%, #e8dfc8 100%);">
             <div class="grid grid-cols-12 gap-3 items-center">
               <div class="col-span-7 space-y-2.5">
@@ -6145,7 +6955,6 @@
                 </div>
               </div>
 
-              <!-- กรอบรูปรถยนต์มุมขวาบน: พื้นหลังขาวเรียบ แสดงรถเต็มคันไม่โดนตัดขอบและไม่ยืดผิดสัดส่วนตอนเซฟ PNG/JPG -->
               <div class="col-span-5">
                 <div class="w-full rounded-xl overflow-hidden border border-[#d6c9a8] bg-white shadow-sm flex items-center justify-center p-1.5" style="height: 144px; background-color: #ffffff;">
                   <img src="${ctx.carHeroSrc}" alt="${ctx.modelText}" style="max-width: 100%; max-height: 132px; width: auto; height: auto; display: block; margin: auto;">
@@ -6632,6 +7441,8 @@
       const carModel = formatEPower(cleanDisplaySpaces(document.getElementById('campaignCarModelInput')?.value).toUpperCase());
       const mgType = document.getElementById('campaignMgTypeInput')?.value || 'normal';
       const freeInsurance = document.getElementById('chkCampFreeInsYes')?.checked || false;
+      const minLoanEnabled = document.getElementById('chkMinLoanEnabled')?.checked || false;
+      const minLoanAmount = num(document.getElementById('campaignMinLoanAmountInput')?.value || 0);
       const isEasyPay = document.getElementById('chkEasyPayCampaign')?.checked || false;
       const balloonPct = num(document.getElementById('campaignBalloonPctInput')?.value ?? 30) || 30;
       const comPct = num(document.getElementById('campaignComPctInput')?.value ?? 8);
@@ -6681,6 +7492,8 @@
         carModel,
         mgType,
         freeInsurance,
+        minLoanEnabled,
+        minLoanAmount,
         isEasyPay,
         balloonPct,
         comPct: isEasyPay ? easyCommCol1 : comPct,
@@ -6961,6 +7774,8 @@
                 CarModel: formatEPower(cp.carModel || ''),
                 MG_Type: cp.mgType || 'normal',
                 FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
+                MinLoanEnabled: cp.minLoanEnabled ? 'TRUE' : 'FALSE',
+                MinLoanAmount: num(cp.minLoanAmount || 0),
                 IsEasyPay: 'TRUE',
                 BalloonPct: cp.balloonPct ?? 30,
                 ComPct: cp.easyCommCol1 ?? 8,
@@ -6982,6 +7797,8 @@
                 CarModel: formatEPower(cp.carModel || ''),
                 MG_Type: cp.mgType || 'normal',
                 FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
+                MinLoanEnabled: cp.minLoanEnabled ? 'TRUE' : 'FALSE',
+                MinLoanAmount: num(cp.minLoanAmount || 0),
                 IsEasyPay: 'FALSE',
                 BalloonPct: 30,
                 ComPct: cp.comPct ?? 8,
@@ -7002,8 +7819,9 @@
         if (rows.length === 0) {
           rows.push({
             Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'STANDARD', CarModel: 'EXAMPLE',
-            MG_Type: 'normal', FreeInsurance: 'FALSE', IsEasyPay: 'FALSE', BalloonPct: 30,
-            ComPct: 8, ComMaxYears: 5, CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%',
+            MG_Type: 'normal', FreeInsurance: 'FALSE', MinLoanEnabled: 'FALSE', MinLoanAmount: 0,
+            IsEasyPay: 'FALSE', BalloonPct: 30, ComPct: 8, ComMaxYears: 5,
+            CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%',
             M24: 1.99, M36: 2.09, M48: 2.19, M60: 2.39, M72: 2.59, M84: 2.89, M96: '-'
           });
         }
@@ -7123,6 +7941,8 @@
             const carModel = formatEPower(cleanDisplaySpaces(r.CarModel || r.Model || '').toUpperCase());
             const isEasyPay = String(r.IsEasyPay || 'FALSE').toUpperCase() === 'TRUE';
             const freeInsurance = String(r.FreeInsurance || 'FALSE').toUpperCase() === 'TRUE';
+            const minLoanEnabled = String(r.MinLoanEnabled || 'FALSE').toUpperCase() === 'TRUE';
+            const minLoanAmount = num(r.MinLoanAmount || 0);
             if (!finance) return;
 
             const key = `${getFinanceFolderKey(finance)}||${campaignName}||${getModelFolderKey(carModel)}||${isEasyPay ? '1' : '0'}`;
@@ -7137,6 +7957,8 @@
                 carModel,
                 mgType: String(r.MG_Type || 'normal').toLowerCase(),
                 freeInsurance,
+                minLoanEnabled,
+                minLoanAmount,
                 isEasyPay,
                 balloonPct: num(r.BalloonPct ?? 30) || 30,
                 comPct: num(r.ComPct ?? 8),
@@ -7235,7 +8057,7 @@
       event.target.value = '';
     }
 
-    // ==================== SUPER ADMIN PANEL (แยกคัดลอก รุ่นรถ/ราคา, MG, อุปกรณ์, แคมเปญ อิสระ) ====================
+    // ==================== SUPER ADMIN PANEL (รองรับอีเมลหรือเบอร์โทร + พิมพ์ชื่อบริษัท/แบรนด์ได้อิสระ) ====================
 
     let adminCache = { users: [], showrooms: [] };
 
@@ -7272,23 +8094,33 @@
       if (!body) return;
       const showrooms = adminCache.showrooms;
       const users = adminCache.users;
+      const defaultSrName = showrooms[0]?.name || '';
 
       body.innerHTML = `
-        <!-- 1. สร้างผู้ใช้งานใหม่ -->
+        <!-- 1. สร้างผู้ใช้งานใหม่ (รองรับอีเมลหรือเบอร์โทร + พิมพ์ชื่อบริษัท/แบรนด์ได้อิสระ) -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
           <h4 class="font-bold text-slate-900 text-sm">➕ เพิ่มผู้ใช้งานใหม่ (ผู้ใช้ใหม่จะเริ่มจากฐานข้อมูลว่างเปล่า แยกอิสระ 100%)</h4>
           <form onsubmit="createUserFromAdmin(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <input type="text" id="admNewName" required placeholder="ชื่อ-นามสกุล (เช่น คุณสมชาย)" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
-            <input type="email" id="admNewEmail" required placeholder="อีเมล (Email)" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
-            <input type="password" id="admNewPass" required placeholder="รหัสผ่าน (อย่างน้อย 4 ตัว)" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <input type="text" id="admNewName" required placeholder="ชื่อ-นามสกุล (เช่น คุณสมชาย)" class="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <input type="text" id="admNewEmail" required placeholder="อีเมล หรือ เบอร์โทรศัพท์ (ใช้ล็อกอิน)" class="bg-slate-50 border border-emerald-300 focus:border-emerald-500 focus:bg-white rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
+            <input type="password" id="admNewPass" required placeholder="รหัสผ่าน (อย่างน้อย 4 ตัว)" class="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl p-2.5 font-semibold text-slate-800 outline-none">
             <select id="admNewTier" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 outline-none">
               <option value="1">ระดับ 1 (เลือกได้ 1 แบรนด์)</option>
               <option value="2">ระดับ 2 (เลือกได้ 3 แบรนด์)</option>
               <option value="3">ระดับ 3 (Super Admin ทุกแบรนด์)</option>
             </select>
-            <select id="admNewShowroom" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 outline-none">
-              ${showrooms.map(sr => `<option value="${sr.id}">${sr.name}</option>`).join('')}
-            </select>
+            <!-- ช่องบริษัท / แบรนด์รถยนต์: พิมพ์เองได้อิสระ หรือกด ▼ เลือกจากโชว์รูม/แบรนด์ -->
+            <div class="relative flex items-center">
+              <input type="text" id="admNewShowroomInput" value="${defaultSrName}" placeholder="พิมพ์ชื่อบริษัท หรือ แบรนด์รถยนต์ (หรือกด ▼ เลือก)" class="w-full bg-slate-50 border border-rose-300 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 pr-9 font-bold text-slate-800 outline-none">
+              <div class="absolute inset-y-0 right-0 w-9 flex items-center justify-center">
+                <span class="text-slate-400 pointer-events-none text-[11px]">▼</span>
+                <select onchange="handleMobileSelect(this, function(v){ document.getElementById('admNewShowroomInput').value=v; })" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="เลือกจากโชว์รูมที่มีหรือแบรนด์รถยนต์">
+                  <option value="">-- เลือกบริษัท / แบรนด์ --</option>
+                  ${showrooms.map(sr => `<option value="${sr.name}">🏢 ${sr.name}</option>`).join('')}
+                  ${BRANDS.map(b => `<option value="${b.name}">🚗 ${b.name}</option>`).join('')}
+                </select>
+              </div>
+            </div>
             <button type="submit" class="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold shadow-sm">
               + สร้างบัญชีผู้ใช้
             </button>
@@ -7316,10 +8148,11 @@
                       <div class="font-extrabold text-slate-900 text-sm flex flex-wrap items-center gap-2">
                         <span>${u.fullName}</span>
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isAdminUser ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${getUserRoleBadgeText(u.roleTier)}</span>
+                        ${u.showroomName ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">🏢 ${u.showroomName}</span>` : ''}
                         ${!u.isActive ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">ระงับใช้งาน</span>` : ''}
                       </div>
                       <div class="text-[11px] text-slate-500 mt-0.5">
-                        ${u.email} • แบรนด์: <strong class="text-slate-700">${brandsLbl}</strong>
+                        บัญชีล็อกอิน: <strong class="text-slate-700">${u.email}</strong> ${u.phone && u.phone !== u.email ? `(โทร ${u.phone})` : ''} • แบรนด์: <strong class="text-slate-700">${brandsLbl}</strong>
                         ${!isAdminUser ? ` • สถานะเลือกแบรนด์: <strong class="${u.canChangeBrand ? 'text-emerald-600' : 'text-amber-700'}">${u.canChangeBrand ? 'เปิดให้เลือกใหม่ได้' : 'ล็อกแล้ว'}</strong>` : ''}
                       </div>
                     </div>
@@ -7344,7 +8177,6 @@
                     </div>
                   </div>
 
-                  <!-- กล่องเลือกข้อมูลที่จะ Clone ส่งให้ผู้ใช้รายนี้ (แยก 4 ส่วนอิสระ) -->
                   ${!isAdminUser ? `
                     <div id="adminCloneBox_${u.id}" class="hidden p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 space-y-2">
                       <div class="font-bold text-emerald-950 text-[11px]">
@@ -7439,12 +8271,14 @@
       const email = document.getElementById('admNewEmail').value.trim();
       const password = document.getElementById('admNewPass').value;
       const roleTier = Number(document.getElementById('admNewTier').value);
-      const showroomId = document.getElementById('admNewShowroom').value;
+      const showroomName = document.getElementById('admNewShowroomInput')?.value.trim() || '';
+      const matchedSr = adminCache.showrooms.find(s => s.name.toLowerCase() === showroomName.toLowerCase());
+      const showroomId = matchedSr ? matchedSr.id : '';
 
       try {
         const res = await apiFetch('/api/admin/users', {
           method: 'POST',
-          body: JSON.stringify({ fullName, email, password, roleTier, showroomId, canChangeBrand: true })
+          body: JSON.stringify({ fullName, email, password, roleTier, showroomId, showroomName, canChangeBrand: true })
         });
         const data = await res.json();
         if (!res.ok) {
