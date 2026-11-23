@@ -1765,7 +1765,7 @@
       `;
     }
     // ==================== [สิ้นสุดโค้ดชุดที่ 2 — พิมพ์ "ต่อชุดที่ 3" เพื่อรับโค้ดชุดถัดไป] ====================
-// ==================== DYNAMIC AVAILABLE TERMS & COMM YEARS PER CAMPAIGN ====================
+// ==================== DYNAMIC AVAILABLE TERMS (กรองตามขั้นดาวน์จริง) & COMM YEARS ====================
 
     function getAvailableMonthsForCampaign(campaignIdx) {
       const cp = campaignIdx >= 0 ? state.campaigns[campaignIdx] : null;
@@ -1780,6 +1780,23 @@
         });
       });
       return validMonths.length > 0 ? validMonths : AVAILABLE_MONTHS;
+    }
+
+    // กรองจำนวนงวดเฉพาะที่มีตัวเลขจริงใน "แถวดาวน์ที่เลือกอยู่" (ใช้ได้กับทุกแบรนด์)
+    function getAvailableMonthsForPlan(plan) {
+      const cp = plan && plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
+      if (!cp) return AVAILABLE_MONTHS;
+      if (cp.isEasyPay) return [60];
+      if (!cp.rates) return AVAILABLE_MONTHS;
+      if (typeof getMatchedDownTierForPlan !== 'function') return getAvailableMonthsForCampaign(plan.campaignIdx);
+
+      const tier = getMatchedDownTierForPlan(plan, cp);
+      if (tier === -1 || !cp.rates[tier]) return [];
+      const row = cp.rates[tier];
+      return AVAILABLE_MONTHS.filter(m => {
+        const val = row[m];
+        return val !== null && val !== undefined && String(val).trim() !== '' && String(val).trim() !== '-' && !isNaN(parseFloat(val));
+      });
     }
 
     function getMaxCommYearsForCampaign(campaignIdx) {
@@ -2184,7 +2201,7 @@
       `;
     }
 
-    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน + แจ้งเตือนยอดจัดขั้นต่ำ & ขั้นดาวน์ไม่มีโปรแกรม) ====================
+    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน — Strict Table-Driven แบบ A) ====================
 
     function renderCalculator() {
       const cardColors = [
@@ -2215,12 +2232,15 @@
                   const displayFinanceText = p.customFinanceText !== '' ? p.customFinanceText : (cpObj ? cpObj.finance : '');
                   const displayCampText = p.customCampaignText !== '' ? p.customCampaignText : (cpObj ? getCampaignDisplayLabel(cpObj) : '');
                   const filteredCamps = getFilteredCampaignsForPlan(displayFinanceText, 'standard');
-                  const availableTerms = getAvailableMonthsForCampaign(p.campaignIdx);
+                  const availableTerms = getAvailableMonthsForPlan(p);
                   const hasSpecialRow = hasValidSpecialDownRow(cpObj);
                   const specialLabel = cpObj ? String(cpObj.specialDownLabel || '').trim() : '-';
                   const specialOptionText = specialLabel.includes('%') || num(specialLabel) === 0
                     ? `ดาวน์ ${specialLabel.replace('%', '')}% (เรทพิเศษ)`
                     : `ดาวน์ ${fmt(num(specialLabel))} ฿ (เรทพิเศษ)`;
+                  const rateInputVal = effectiveRate !== null ? effectiveRate.toFixed(2) : '';
+                  const subBaseVal = effectiveRate !== null ? effectiveRate.toFixed(2) : '-';
+                  const subDefaultVal = effectiveRate !== null ? Math.max(effectiveRate - 0.5, 0).toFixed(2) : '';
 
                   return `
                     <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border ${p.isOpen ? 'border-slate-200/90' : 'border-slate-200/50 opacity-75'} transition-all">
@@ -2264,13 +2284,13 @@
                         </div>
 
                         <div>
-                          <label class="block text-xs font-medium text-slate-500 mb-1.5">จำนวนงวดที่ผ่อน (เดือน) <span class="text-[10px] text-blue-600 font-normal">(เลือก ▼ หรือพิมพ์เลข)</span></label>
+                          <label class="block text-xs font-medium text-slate-500 mb-1.5">จำนวนงวดที่ผ่อน (เดือน) <span class="text-[10px] text-blue-600 font-normal">(แสดงเฉพาะงวดที่มีในขั้นดาวน์นี้)</span></label>
                           <div class="relative flex items-center">
                             <input type="number" id="plan-${p.id}-termInput" value="${p.term}" min="1" max="120" oninput="updatePlanTermTyped(${p.id}, this.value)" placeholder="พิมพ์จำนวนเดือน เช่น 48" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 pr-24 text-sm font-bold text-slate-800 outline-none">
                             <span id="plan-${p.id}-yearHint" class="absolute right-10 text-xs text-slate-400 font-semibold pointer-events-none">(${Number((p.term/12).toFixed(1))} ปี)</span>
                             <div class="absolute inset-y-0 right-0 w-10 flex items-center justify-center">
                               <span class="text-slate-400 pointer-events-none text-xs">▼</span>
-                              <select onchange="handleMobileSelect(this, function(v){ updatePlanTerm(${p.id}, v); })" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="เลือกจำนวนงวดที่มีในแคมเปญ">
+                              <select id="plan-${p.id}-termSelect" onchange="handleMobileSelect(this, function(v){ updatePlanTerm(${p.id}, v); })" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="เลือกจำนวนงวดที่มีในขั้นดาวน์นี้">
                                 <option value="">-- เลือกจำนวนงวด --</option>
                                 ${availableTerms.map(m => `<option value="${m}">${m} เดือน (${m/12} ปี)</option>`).join('')}
                               </select>
@@ -2294,7 +2314,7 @@
                           <input type="text" id="plan-${p.id}-downAmt" value="${fmt(p.downAmt)}" oninput="updatePlanDownAmt(${p.id}, this.value)" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                         </div>
 
-                        <!-- แถบแจ้งเตือนยอดจัดต่ำกว่าขั้นต่ำ หรือ ขั้นดาวน์ไม่มีโปรแกรม -->
+                        <!-- แถบแจ้งเตือนยอดจัดต่ำกว่าขั้นต่ำ หรือ ขั้นดาวน์/งวดไม่มีโปรแกรม -->
                         <div id="plan-${p.id}-minLoanWarn" class="hidden sm:col-span-2 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-700 text-xs font-extrabold flex items-center gap-2">
                           <span>⚠️</span>
                           <span id="plan-${p.id}-minLoanWarnText"></span>
@@ -2305,12 +2325,14 @@
                             <label class="text-xs font-medium text-slate-500">
                               อัตราดอกเบี้ย (% ต่อปี)
                               <span class="text-blue-600 font-normal" id="plan-${p.id}-rateHint">
-                                (คอม ${p.commPct ?? 8}% ${commDiff !== 0 ? `[${commDiff > 0 ? '+' : ''}${commDiff.toFixed(2)}%] ` : ''}${p.isBeginning ? `• หัก Beginning -0.10% จาก ${baseRate.toFixed(2)}% เหลือ ${effectiveRate.toFixed(2)}%` : '• อัตโนมัติตามตาราง/แก้ได้'})
+                                ${effectiveRate !== null
+                                  ? `(คอม ${p.commPct ?? 8}% ${commDiff !== 0 ? `[${commDiff > 0 ? '+' : ''}${commDiff.toFixed(2)}%] ` : ''}${p.isBeginning && baseRate !== null ? `• หัก Beginning -0.10% จาก ${baseRate.toFixed(2)}% เหลือ ${effectiveRate.toFixed(2)}%` : '• อัตโนมัติตามตาราง/แก้ได้'})`
+                                  : '(ไม่มีเรทในตาราง — เปลี่ยนงวด/ดาวน์ หรือพิมพ์ดอกเบี้ยเอง)'}
                               </span>
                             </label>
                             ${p.customRate !== '' ? `<button type="button" onclick="resetPlanRate(${p.id})" class="text-[11px] text-blue-600 hover:underline font-semibold">↺ คืนค่าตามตาราง</button>` : ''}
                           </div>
-                          <input type="number" id="plan-${p.id}-rateInput" step="0.01" value="${effectiveRate.toFixed(2)}" oninput="updatePlanCustomRate(${p.id}, this.value)" class="w-full bg-blue-50/60 border border-blue-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-blue-800 outline-none transition-colors">
+                          <input type="number" id="plan-${p.id}-rateInput" step="0.01" value="${rateInputVal}" placeholder="-" oninput="updatePlanCustomRate(${p.id}, this.value)" class="w-full bg-blue-50/60 border border-blue-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-blue-800 outline-none transition-colors">
                         </div>
 
                         <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
@@ -2335,9 +2357,9 @@
                           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                               <label class="block text-xs font-bold text-amber-950">อัตราดอกเบี้ยที่ลูกค้าจ่ายจริง rs (% ต่อปี)</label>
-                              <p class="text-[11px] text-amber-700">คิดเงินซับจากเรทตั้งต้น r = <span id="plan-${p.id}-subBaseLabel">${effectiveRate.toFixed(2)}</span>% (ยอดเงินซับแสดงเฉพาะในกล่องดำและหน้างบกำไร)</p>
+                              <p class="text-[11px] text-amber-700">คิดเงินซับจากเรทตั้งต้น r = <span id="plan-${p.id}-subBaseLabel">${subBaseVal}</span>% (ยอดเงินซับแสดงเฉพาะในกล่องดำและหน้างบกำไร)</p>
                             </div>
-                            <input type="number" id="plan-${p.id}-subRateInput" step="0.01" value="${p.subCustomerRate !== '' ? p.subCustomerRate : Math.max(effectiveRate - 0.5, 0).toFixed(2)}" oninput="updatePlanSubRate(${p.id}, this.value)" class="w-full sm:w-40 bg-white border border-amber-300 focus:border-amber-500 rounded-xl p-2.5 text-sm font-extrabold text-amber-900 text-center outline-none">
+                            <input type="number" id="plan-${p.id}-subRateInput" step="0.01" value="${p.subCustomerRate !== '' ? p.subCustomerRate : subDefaultVal}" oninput="updatePlanSubRate(${p.id}, this.value)" class="w-full sm:w-40 bg-white border border-amber-300 focus:border-amber-500 rounded-xl p-2.5 text-sm font-extrabold text-amber-900 text-center outline-none">
                           </div>
                         </div>
                       </div>
@@ -2364,7 +2386,7 @@
                       <div class="bg-slate-950 p-4 rounded-2xl border ${cStyle.border} shadow-lg transition-all ${p.isOpen ? '' : 'hidden'}" id="sidebar-card-${p.id}">
                         <div class="flex justify-between items-center text-xs mb-1.5">
                           <span class="font-bold text-slate-200" id="sidebar-title-${p.id}">${p.name} (ผ่อน ${p.term} เดือน)</span>
-                          <span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${cStyle.badge}">ดอกเบี้ย <span id="sidebar-rate-${p.id}">0</span>%</span>
+                          <span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${cStyle.badge}">ดอกเบี้ย <span id="sidebar-rate-${p.id}">-</span>%</span>
                         </div>
                         <div class="text-[11px] text-slate-400 mb-2 flex justify-between">
                           <span>ดาวน์ (<span id="sidebar-downpct-${p.id}">0</span>%): <strong class="text-slate-200" id="sidebar-down-${p.id}">0</strong> ฿</span>
@@ -2411,13 +2433,13 @@
       `;
     }
 
-    // ==================== 2. หน้าคำนวณ BALLOON (+ แจ้งเตือนยอดจัดขั้นต่ำ & ขั้นดาวน์ไม่มีโปรแกรม) ====================
+    // ==================== 2. หน้าคำนวณ BALLOON (Strict Table-Driven แบบ A) ====================
 
     function renderBalloonPage() {
       const bp = state.balloonPlan;
       bp.term = 60;
       const autoRate = getAutoRateForPlan(bp);
-      const displayRate = bp.customRate !== '' ? bp.customRate : autoRate;
+      const displayRateStr = bp.customRate !== '' ? Number(bp.customRate).toFixed(2) : (autoRate !== null ? autoRate.toFixed(2) : '');
       const cpObj = (bp.campaignIdx >= 0 && state.campaigns[bp.campaignIdx] && state.campaigns[bp.campaignIdx].isEasyPay)
         ? state.campaigns[bp.campaignIdx]
         : null;
@@ -2524,9 +2546,9 @@
                   <div class="sm:col-span-2">
                     <div class="flex justify-between items-center mb-1.5">
                       <label class="text-xs font-medium text-slate-500">อัตราดอกเบี้ย r (% ต่อปี) <span id="balloon-rateHint" class="text-purple-600 font-normal">(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)</span></label>
-                      ${bp.customRate !== '' ? `<button type="button" onclick="state.balloonPlan.customRate='';render();" class="text-[11px] text-purple-600 hover:underline font-semibold">↺ คืนค่าตามตาราง (${autoRate.toFixed(2)}%)</button>` : ''}
+                      ${bp.customRate !== '' ? `<button type="button" onclick="state.balloonPlan.customRate='';render();" class="text-[11px] text-purple-600 hover:underline font-semibold">↺ คืนค่าตามตาราง${autoRate !== null ? ` (${autoRate.toFixed(2)}%)` : ''}</button>` : ''}
                     </div>
-                    <input type="number" id="balloon-rateInput" step="0.01" value="${Number(displayRate).toFixed(2)}" oninput="updateBalloonCustomRate(this.value)" class="w-full bg-purple-50/40 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-purple-900 outline-none transition-colors">
+                    <input type="number" id="balloon-rateInput" step="0.01" value="${displayRateStr}" placeholder="-" oninput="updateBalloonCustomRate(this.value)" class="w-full bg-purple-50/40 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-purple-900 outline-none transition-colors">
                   </div>
                 </div>
               </div>
@@ -2560,7 +2582,7 @@
                 <div class="bg-slate-950 p-4 rounded-2xl border border-purple-500/40 shadow-lg space-y-2">
                   <div class="flex justify-between items-center text-xs">
                     <span class="font-bold text-purple-300" id="balMainCardTitle">แผนหลัก (ผ่อน 60 เดือน)</span>
-                    <span class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-500/20 text-purple-300">ดอกเบี้ย <span id="balMainRate">0</span>%</span>
+                    <span class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-500/20 text-purple-300">ดอกเบี้ย <span id="balMainRate">-</span>%</span>
                   </div>
                   <div class="text-[11px] text-slate-400 flex justify-between">
                     <span>เงินดาวน์ (<span id="balMainDownPct">0</span>%): <strong class="text-white" id="balMainDownAmt">0</strong> ฿</span>
@@ -2755,7 +2777,7 @@
               </div>
             </div>
 
-            <!-- ส่วนที่ 1 & 2: เลือกรถได้หลายรุ่น (ซ้าย) + เลือกแบบ/รุ่นย่อยแยกตามรุ่น (ขวา) -->
+            <!-- ส่วนที่ 1 & 2 -->
             <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
               <div class="md:col-span-4 bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 flex flex-col">
                 <div class="flex items-center justify-between gap-2 mb-3">
@@ -2890,7 +2912,6 @@
                   </div>
                 </div>
 
-                <!-- QR Code LINE Upload -->
                 <div class="md:col-span-2 flex flex-col items-center gap-1.5">
                   <span class="text-[11px] font-bold text-slate-600">QR Code LINE</span>
                   <input type="file" id="plQrCodeInput" accept="image/*" class="hidden" onchange="handlePriceListQrUpload(event)">
@@ -2922,7 +2943,7 @@
       `;
     }
 
-    // ==================== 5. หน้าตั้งค่าระบบ (Settings + เพิ่มจำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์) ====================
+    // ==================== 5. หน้าตั้งค่าระบบ (Settings — นำช่องจำกัดค่าคอมออกแล้ว) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
@@ -2960,9 +2981,6 @@
       const isFreeInsChecked = editingCamp && editingCamp.freeInsurance ? true : false;
       const isMinLoanChecked = editingCamp && editingCamp.minLoanEnabled ? true : false;
       const minLoanVal = editingCamp && editingCamp.minLoanAmount ? editingCamp.minLoanAmount : '';
-      const isCommCapChecked = editingCamp && editingCamp.commCapEnabled ? true : false;
-      const commCapDownVal = editingCamp && editingCamp.commCapDownPct ? editingCamp.commCapDownPct : '';
-      const commCapMaxVal = editingCamp && editingCamp.commCapMaxPct !== undefined ? editingCamp.commCapMaxPct : 8;
 
       const specialDownVal = editingCamp && editingCamp.specialDownLabel !== undefined ? editingCamp.specialDownLabel : '-';
       const campMgType = editingCamp && editingCamp.mgType ? editingCamp.mgType : 'normal';
@@ -3115,7 +3133,7 @@
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
                   <h3 class="font-bold text-slate-800 text-base">🏦 จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix)</h3>
-                  <p class="text-xs text-slate-500">Easy Pay ช่องที่ใส่ "-" ระบบจะตัด % ค่าคอมนั้นออกอัตโนมัติ | ผ่อนมาตรฐานตั้งจำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์ได้</p>
+                  <p class="text-xs text-slate-500">ช่องใดใส่ "-" ระบบจะไม่อนุญาตให้คำนวณเงื่อนไขนั้น (แสดงแจ้งเตือนสีแดงทันที) และซ่อนตัวเลือกงวด/ค่าคอมที่ไม่มีในตารางให้อัตโนมัติ</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" onclick="exportBrandExcelTemplate('campaigns')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
@@ -3308,30 +3326,15 @@
                 </div>
               </div>
 
-              <p class="text-[11px] text-slate-500 mt-1">* คำแนะนำแถวล่างสุด: พิมพ์ <strong>0%</strong> หรือพิมพ์ยอดเงินดาวน์เริ่มต้น เช่น <strong>5555</strong> หรือ <strong>19999</strong> (หากไม่มีเรทให้ใส่ <strong>-</strong> ระบบจะตัดตัวเลือกคอมของช่องที่เป็น <strong>-</strong> ออกให้เองอัตโนมัติ)</p>
+              <p class="text-[11px] text-slate-500 mt-1">* คำแนะนำแถวล่างสุด: พิมพ์ <strong>0%</strong> หรือพิมพ์ยอดเงินดาวน์เริ่มต้น เช่น <strong>5555</strong> หรือ <strong>19999</strong> (ช่องใดไม่มีโปรแกรมให้ใส่ <strong>-</strong> ระบบจะไม่อนุญาตให้คำนวณเงื่อนไขนั้นและแจ้งเตือนอัตโนมัติ)</p>
 
-              <!-- ช่องกำหนดเงื่อนไขพิเศษ: ยอดสินเชื่อขั้นต่ำ + จำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์ + ปุ่มบันทึก -->
-              <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-3 pt-2">
-                <div class="flex flex-wrap items-end gap-4">
-                  <!-- 1. ยอดสินเชื่อต้องไม่ต่ำกว่า -->
-                  <div class="flex items-center gap-2">
-                    <input type="checkbox" id="chkMinLoanEnabled" ${isMinLoanChecked ? 'checked' : ''} class="w-4 h-4 accent-rose-600 rounded cursor-pointer mt-4">
-                    <div>
-                      <label for="chkMinLoanEnabled" class="block text-xs font-extrabold text-rose-700 mb-1 cursor-pointer">ยอดสินเชื่อต้องไม่ต่ำกว่า (บาท)</label>
-                      <input type="number" id="campaignMinLoanAmountInput" value="${minLoanVal}" placeholder="เช่น 580000" class="w-44 bg-rose-50/40 border-2 border-rose-200 focus:border-rose-500 focus:bg-white rounded-xl px-3 py-2 text-sm font-extrabold text-rose-800 outline-none">
-                    </div>
-                  </div>
-
-                  <!-- 2. จำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์ (แสดงเฉพาะโหมดผ่อนมาตรฐาน) -->
-                  <div id="settingCommCapBox" class="${isEasyPayChecked ? 'hidden' : 'flex'} items-center gap-2 p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200">
-                    <input type="checkbox" id="chkCommCapEnabled" ${isCommCapChecked ? 'checked' : ''} class="w-4 h-4 accent-amber-600 rounded cursor-pointer">
-                    <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold text-amber-950">
-                      <label for="chkCommCapEnabled" class="cursor-pointer">จำกัดค่าคอมเมื่อดาวน์ต่ำกว่า</label>
-                      <input type="number" id="campaignCommCapDownPctInput" value="${commCapDownVal}" placeholder="15" min="1" max="50" class="w-14 bg-white border border-amber-300 focus:border-amber-600 rounded-lg px-2 py-1 text-center font-extrabold text-amber-950 outline-none">
-                      <span>% ไม่เกิน</span>
-                      <input type="number" id="campaignCommCapMaxPctInput" value="${commCapMaxVal}" placeholder="8" min="0" max="30" class="w-14 bg-white border border-amber-300 focus:border-amber-600 rounded-lg px-2 py-1 text-center font-extrabold text-amber-950 outline-none">
-                      <span>%</span>
-                    </div>
+              <!-- ช่องกำหนดยอดสินเชื่อขั้นต่ำ + ปุ่มบันทึก -->
+              <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2">
+                <div class="flex items-center gap-2.5">
+                  <input type="checkbox" id="chkMinLoanEnabled" ${isMinLoanChecked ? 'checked' : ''} class="w-4 h-4 accent-rose-600 rounded cursor-pointer mt-4">
+                  <div>
+                    <label for="chkMinLoanEnabled" class="block text-xs font-extrabold text-rose-700 mb-1 cursor-pointer">ยอดสินเชื่อต้องไม่ต่ำกว่า (บาท)</label>
+                    <input type="number" id="campaignMinLoanAmountInput" value="${minLoanVal}" placeholder="เช่น 580000 (เว้นว่าง = ไม่แจ้งเตือน)" class="w-56 bg-rose-50/40 border-2 border-rose-200 focus:border-rose-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-sm font-extrabold text-rose-800 outline-none">
                   </div>
                 </div>
 
@@ -3412,7 +3415,6 @@
                                           ${cp.isEasyPay ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">🎈 EASY PAY (${cp.balloonPct}%)</span>` : ''}
                                           ${cp.freeInsurance ? `<span class="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">✓ แถมประกัน</span>` : ''}
                                           ${cp.minLoanEnabled && cp.minLoanAmount > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px]">ขั้นต่ำ ${fmt(cp.minLoanAmount)}฿</span>` : ''}
-                                          ${!cp.isEasyPay && cp.commCapEnabled && cp.commCapDownPct > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">ดาวน์&lt;${cp.commCapDownPct}% คอม≤${cp.commCapMaxPct}%</span>` : ''}
                                         </div>
                                         <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
                                           <span class="text-emerald-600 font-semibold">${termRangeLabel}</span>
@@ -4045,7 +4047,7 @@
       return Math.max(priceNoAcc + accessories, 0);
     }
 
-    // ==================== TABLE-DRIVEN COMMISSION FILTERING & VALIDATION ====================
+    // ==================== STRICT TABLE-DRIVEN VALIDATION & EASY PAY COMM FILTERING ====================
 
     function isValidRateValue(v) {
       return v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== '-' && !isNaN(parseFloat(v));
@@ -4091,22 +4093,15 @@
         return { allowed: uniqueSorted, hasProgram: uniqueSorted.length > 0, tier };
       }
 
-      // 2. ผ่อนมาตรฐาน: ตรวจว่าแถวดาวน์นั้นมีเรทจริง + กรองตามเงื่อนไข "จำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์"
+      // 2. ผ่อนมาตรฐาน: เช็กตรงพิกัด [แถวดาวน์ที่เลือก × จำนวนงวดที่เลือก] (ไม่มี fallback ข้ามงวด)
       let hasProgram = false;
       if (tier !== -1 && cp.rates && cp.rates[tier]) {
-        const rRow = cp.rates[tier];
-        hasProgram = AVAILABLE_MONTHS.some(m => isValidRateValue(rRow[m]));
+        hasProgram = isValidRateValue(cp.rates[tier][plan.term]);
       }
 
-      let opts = (Array.isArray(cp.commOptions) && cp.commOptions.length > 0)
+      const opts = (Array.isArray(cp.commOptions) && cp.commOptions.length > 0)
         ? [...cp.commOptions]
         : parseCommOptionsList(DEFAULT_COMM_OPTIONS, cp.comPct ?? 8);
-
-      if (cp.commCapEnabled && num(cp.commCapDownPct) > 0 && num(plan.downPct) < num(cp.commCapDownPct)) {
-        const maxCap = num(cp.commCapMaxPct ?? 8);
-        opts = opts.filter(v => v <= maxCap);
-        if (opts.length === 0) opts = [maxCap];
-      }
 
       const uniqueSorted = [...new Set(opts)].sort((a, b) => a - b);
       return { allowed: uniqueSorted, hasProgram, tier };
@@ -4119,20 +4114,11 @@
 
       const cur = Number(plan.commPct);
       if (!info.allowed.includes(cur)) {
-        const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
-        if (cp && cp.isEasyPay) {
-          plan.commPct = info.allowed[0];
-        } else {
-          // ถ้าคอมเดิมสูงกว่าเพดานที่อนุญาต ให้ลดมาเท่าค่าสูงสุดที่อนุญาต
-          const lowerOrEq = info.allowed.filter(v => v <= cur);
-          plan.commPct = lowerOrEq.length > 0 ? lowerOrEq[lowerOrEq.length - 1] : info.allowed[0];
-        }
+        plan.commPct = info.allowed[0];
         return true;
       }
       return false;
     }
-
-    // ==================== MIN LOAN & NO-PROGRAM VALIDATION HELPER ====================
 
     function getMinLoanWarningMessage(cp, financeAmt, netPrice) {
       if (!cp || !cp.minLoanEnabled || num(cp.minLoanAmount) <= 0) return '';
@@ -4148,7 +4134,7 @@
       return '';
     }
 
-    // ==================== INTEREST RATE & EASY PAY COLUMN LOOKUP ENGINE ====================
+    // ==================== INTEREST RATE LOOKUP (STRICT — ไม่แอบยืมเรทจากงวดอื่น) ====================
 
     function getCommRateAdjustment(plan) {
       const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
@@ -4178,46 +4164,36 @@
       const matchedTier = getMatchedDownTierForPlan(plan, cp);
 
       if (cp.isEasyPay && cp.easyRates) {
-        if (matchedTier === -1) return 0;
-        const rowObj = cp.easyRates[matchedTier] || {};
+        if (matchedTier === -1 || !cp.easyRates[matchedTier]) return null;
+        const rowObj = cp.easyRates[matchedTier];
         const selComm = Number(plan.commPct ?? cp.easyCommCol1 ?? 8);
         const col2Comm = Number(cp.easyCommCol2 ?? 16);
         const chosenVal = (selComm === col2Comm) ? rowObj.col2 : rowObj.col1;
         const fallbackVal = isValidRateValue(chosenVal) ? chosenVal : (isValidRateValue(rowObj.col1) ? rowObj.col1 : rowObj.col2);
-
-        if (isValidRateValue(fallbackVal)) {
-          return parseFloat(fallbackVal);
-        }
-        return 0;
+        return isValidRateValue(fallbackVal) ? parseFloat(fallbackVal) : null;
       }
 
-      if (!cp.rates || matchedTier === -1) return 0;
-      const rTable = cp.rates[matchedTier] || {};
-      const rate = rTable[plan.term];
-      if (isValidRateValue(rate)) {
-        return parseFloat(rate);
-      }
-
-      const availMonths = getAvailableMonthsForCampaign(plan.campaignIdx);
-      const closestMonth = availMonths.find(m => m >= plan.term && isValidRateValue(rTable[m]))
-        || availMonths.slice().reverse().find(m => isValidRateValue(rTable[m]));
-      const fallbackRate = closestMonth ? rTable[closestMonth] : null;
-      return isValidRateValue(fallbackRate) ? parseFloat(fallbackRate) : 0;
+      if (!cp.rates || matchedTier === -1 || !cp.rates[matchedTier]) return null;
+      const rate = cp.rates[matchedTier][plan.term];
+      // Strict: คืนค่าเฉพาะช่อง [ขั้นดาวน์ × จำนวนงวด] ที่มีตัวเลขจริงเท่านั้น ห้ามยืมงวดอื่น
+      return isValidRateValue(rate) ? parseFloat(rate) : null;
     }
 
     function getAutoRateForPlan(plan) {
       const tableRate = getTableRateForPlan(plan);
-      if (tableRate <= 0) return 0;
+      if (tableRate === null) return null;
       const commAdj = getCommRateAdjustment(plan);
       return Number(Math.max(tableRate + commAdj, 0).toFixed(4));
     }
 
     function getBaseRateBeforeBeginning(plan) {
-      return plan.customRate !== '' ? num(plan.customRate) : getAutoRateForPlan(plan);
+      if (plan.customRate !== '') return num(plan.customRate);
+      return getAutoRateForPlan(plan);
     }
 
     function getEffectiveRateAfterBeginning(plan) {
       const base = getBaseRateBeforeBeginning(plan);
+      if (base === null) return null;
       const eff = plan.isBeginning ? Math.max(base - 0.10, 0) : base;
       return Number(eff.toFixed(4));
     }
@@ -4228,8 +4204,26 @@
       const n = Math.max(num(plan.term), 1);
 
       const rPct = getEffectiveRateAfterBeginning(plan);
-      const rDec = rPct / 100;
+      const hasProgram = rPct !== null;
 
+      if (!hasProgram) {
+        return {
+          down,
+          finance,
+          rPct: null,
+          rsPct: null,
+          monthly: 0,
+          subsidyAmt: 0,
+          commAmt: 0,
+          commPct: plan.commPct ?? 8,
+          commYears: getDefaultCommYearsForTerm(n, plan.campaignIdx),
+          beginningInstallment: 0,
+          driveOffTotal: down,
+          hasProgram: false
+        };
+      }
+
+      const rDec = rPct / 100;
       const rsPct = plan.isSubsidy
         ? (plan.subCustomerRate !== '' ? num(plan.subCustomerRate) : Math.max(rPct - 0.50, 0))
         : rPct;
@@ -4268,7 +4262,8 @@
         commPct: plan.commPct ?? 8,
         commYears: commYearsVal,
         beginningInstallment,
-        driveOffTotal
+        driveOffTotal,
+        hasProgram: true
       };
     }
 
@@ -4324,7 +4319,7 @@
         const m = computePlanMetrics(activePlan, netPrice);
         baseDown = m.down;
         financeAmt = m.finance;
-        if (activePlan.isBeginning) {
+        if (activePlan.isBeginning && m.hasProgram) {
           beginningInstallment = m.beginningInstallment;
           beginningLabelText = `Beginning - ${activePlan.name}   ${fmt(m.monthly)} ฿ • ${activePlan.term} งวด (${m.rsPct.toFixed(2)}%)`;
         }
@@ -4444,7 +4439,7 @@
       }
     }
 
-    // ==================== HANDLERS: 4 STANDARD PLANS ====================
+    // ==================== HANDLERS: 4 STANDARD PLANS (แบบ A — Strict Table-Driven) ====================
 
     function togglePlan(planId) {
       const plan = state.plans.find(p => p.id === planId);
@@ -4528,11 +4523,6 @@
           if (yearHint) yearHint.innerText = `(${Number((parsed / 12).toFixed(1))} ปี)`;
           const sidebarTitle = document.getElementById(`sidebar-title-${planId}`);
           if (sidebarTitle) sidebarTitle.innerText = `${plan.name} (ผ่อน ${plan.term} เดือน)`;
-          if (plan.customRate === '') {
-            const effRate = getEffectiveRateAfterBeginning(plan);
-            const rateInput = document.getElementById(`plan-${planId}-rateInput`);
-            if (rateInput) rateInput.value = effRate.toFixed(2);
-          }
           calculateAll();
         }
       }
@@ -4583,11 +4573,6 @@
         if (pctInput && document.activeElement !== pctInput) pctInput.value = plan.downPct;
         if (amtInput) amtInput.value = fmt(plan.downAmt);
 
-        if (plan.customRate === '') {
-          const effRate = getEffectiveRateAfterBeginning(plan);
-          const rateInput = document.getElementById(`plan-${planId}-rateInput`);
-          if (rateInput) rateInput.value = effRate.toFixed(2);
-        }
         calculateAll();
       }
     }
@@ -4608,11 +4593,6 @@
         const pctInput = document.getElementById(`plan-${planId}-downPct`);
         if (pctInput) pctInput.value = plan.downPct;
 
-        if (plan.customRate === '') {
-          const effRate = getEffectiveRateAfterBeginning(plan);
-          const rateInput = document.getElementById(`plan-${planId}-rateInput`);
-          if (rateInput) rateInput.value = effRate.toFixed(2);
-        }
         calculateAll();
       }
     }
@@ -4620,10 +4600,14 @@
     function updatePlanCustomRate(planId, rateVal) {
       const plan = state.plans.find(p => p.id === planId);
       if (plan) {
-        const entered = num(rateVal);
-        plan.customRate = plan.isBeginning ? Number((entered + 0.10).toFixed(4)) : entered;
-        const subBaseLabel = document.getElementById(`plan-${planId}-subBaseLabel`);
-        if (subBaseLabel) subBaseLabel.innerText = entered.toFixed(2);
+        if (String(rateVal).trim() === '') {
+          plan.customRate = '';
+        } else {
+          const entered = num(rateVal);
+          plan.customRate = plan.isBeginning ? Number((entered + 0.10).toFixed(4)) : entered;
+          const subBaseLabel = document.getElementById(`plan-${planId}-subBaseLabel`);
+          if (subBaseLabel) subBaseLabel.innerText = entered.toFixed(2);
+        }
         calculateAll();
       }
     }
@@ -4644,7 +4628,7 @@
         plan.isSubsidy = checked;
         if (checked && plan.subCustomerRate === '') {
           const effRate = getEffectiveRateAfterBeginning(plan);
-          plan.subCustomerRate = Math.max(effRate - 0.50, 0).toFixed(2);
+          plan.subCustomerRate = effRate !== null ? Math.max(effRate - 0.50, 0).toFixed(2) : '';
         }
         render();
       }
@@ -4658,6 +4642,7 @@
     function calculateAll() {
       const priceNoAcc = getPriceWithoutAccessories();
       const netPrice = getNetPriceWithoutDown();
+      const cardTextColors = ['text-sky-400', 'text-emerald-400', 'text-amber-400', 'text-purple-400'];
 
       if (document.getElementById('resPriceNoAccBanner')) document.getElementById('resPriceNoAccBanner').innerText = fmt(priceNoAcc) + ' ฿';
       if (document.getElementById('resNetPriceFull')) document.getElementById('resNetPriceFull').innerText = fmt(netPrice) + ' ฿';
@@ -4673,30 +4658,49 @@
           if (pctInput && document.activeElement !== pctInput) pctInput.value = p.downPct;
         }
         enforceAllowedCommForPlan(p);
+
+        // อัปเดต Dropdown จำนวนงวดของแผนนี้ให้แสดงเฉพาะงวดที่มีตัวเลขจริงในขั้นดาวน์ปัจจุบัน
+        const termSel = document.getElementById(`plan-${p.id}-termSelect`);
+        if (termSel) {
+          const availForRow = getAvailableMonthsForPlan(p);
+          termSel.innerHTML = `<option value="">-- เลือกจำนวนงวด --</option>`
+            + availForRow.map(m => `<option value="${m}">${m} เดือน (${m/12} ปี)</option>`).join('');
+        }
       });
 
       updateBlackSummaryBoxDOM();
 
-      state.plans.forEach(p => {
+      state.plans.forEach((p, idx) => {
         const m = computePlanMetrics(p, netPrice);
         const cp = p.campaignIdx >= 0 ? state.campaigns[p.campaignIdx] : null;
-        const commInfo = getAllowedCommInfoForPlan(p);
+        const availForRow = getAvailableMonthsForPlan(p);
 
         const rateInput = document.getElementById(`plan-${p.id}-rateInput`);
         if (rateInput && p.customRate === '' && document.activeElement !== rateInput) {
-          rateInput.value = m.rPct.toFixed(2);
+          rateInput.value = m.hasProgram ? m.rPct.toFixed(2) : '';
         }
         const rateHint = document.getElementById(`plan-${p.id}-rateHint`);
         if (rateHint) {
-          const commDiff = getCommRateAdjustment(p);
-          const baseRate = getBaseRateBeforeBeginning(p);
-          rateHint.innerText = `(คอม ${p.commPct ?? 8}% ${commDiff !== 0 ? `[${commDiff > 0 ? '+' : ''}${commDiff.toFixed(2)}%] ` : ''}${p.isBeginning ? `• หัก Beginning -0.10% จาก ${baseRate.toFixed(2)}% เหลือ ${m.rPct.toFixed(2)}%` : '• อัตโนมัติตามตาราง/แก้ได้'})`;
+          if (m.hasProgram) {
+            const commDiff = getCommRateAdjustment(p);
+            const baseRate = getBaseRateBeforeBeginning(p);
+            rateHint.innerText = `(คอม ${p.commPct ?? 8}% ${commDiff !== 0 ? `[${commDiff > 0 ? '+' : ''}${commDiff.toFixed(2)}%] ` : ''}${p.isBeginning && baseRate !== null ? `• หัก Beginning -0.10% จาก ${baseRate.toFixed(2)}% เหลือ ${m.rPct.toFixed(2)}%` : '• อัตโนมัติตามตาราง/แก้ได้'})`;
+          } else {
+            rateHint.innerText = '(ไม่มีเรทในตาราง — เปลี่ยนงวด/ดาวน์ หรือพิมพ์ดอกเบี้ยเอง)';
+          }
         }
 
-        const noProgMsg = (cp && netPrice > 0 && !commInfo.hasProgram)
-          ? `ดาวน์ ${p.downPct}% ไม่มีโปรแกรมในแคมเปญนี้`
-          : '';
-        const minLoanMsg = getMinLoanWarningMessage(cp, m.finance, netPrice);
+        // สร้างข้อความแจ้งเตือนแบบ A
+        let noProgMsg = '';
+        if (cp && netPrice > 0 && !m.hasProgram) {
+          if (availForRow.length === 0) {
+            noProgMsg = `ดาวน์ ${p.downPct}% ไม่มีโปรแกรมในแคมเปญนี้`;
+          } else {
+            const maxTerm = availForRow[availForRow.length - 1];
+            noProgMsg = `ดาวน์ ${p.downPct}% ไม่มีโปรแกรมผ่อน ${p.term} เดือนในแคมเปญนี้ (ผ่อนได้สูงสุด ${maxTerm} เดือน)`;
+          }
+        }
+        const minLoanMsg = m.hasProgram ? getMinLoanWarningMessage(cp, m.finance, netPrice) : '';
         const warnMsg = noProgMsg || minLoanMsg;
 
         const warnBox = document.getElementById(`plan-${p.id}-minLoanWarn`);
@@ -4722,36 +4726,49 @@
         const financeSpan = document.getElementById(`sidebar-finance-${p.id}`);
         const instSpan = document.getElementById(`sidebar-inst-${p.id}`);
 
-        if (rateSpan) rateSpan.innerText = m.rsPct.toFixed(2);
         if (downPctSpan) downPctSpan.innerText = p.downPct;
         if (downSpan) downSpan.innerText = fmt(m.down);
         if (financeSpan) financeSpan.innerText = fmt(m.finance);
-        if (instSpan) instSpan.innerText = fmt(m.monthly) + ' ฿ / เดือน';
 
         const begBox = document.getElementById(`sidebar-beg-box-${p.id}`);
-        if (begBox) {
-          if (p.isBeginning) {
-            begBox.classList.remove('hidden');
-            document.getElementById(`sidebar-beg-amt-${p.id}`).innerText = fmt(m.beginningInstallment) + ' ฿';
-            document.getElementById(`sidebar-driveoff-${p.id}`).innerText = fmt(m.driveOffTotal) + ' ฿';
-          } else {
-            begBox.classList.add('hidden');
-          }
-        }
-
         const subBox = document.getElementById(`sidebar-sub-box-${p.id}`);
-        if (subBox) {
-          if (p.isSubsidy) {
-            subBox.classList.remove('hidden');
-            document.getElementById(`sidebar-sub-amt-${p.id}`).innerText = fmt(m.subsidyAmt) + ' ฿';
-          } else {
-            subBox.classList.add('hidden');
+
+        if (!m.hasProgram) {
+          if (rateSpan) rateSpan.innerText = '-';
+          if (instSpan) {
+            instSpan.innerText = 'ไม่มีโปรแกรมในเงื่อนไขนี้';
+            instSpan.className = 'text-sm font-extrabold text-rose-400 tracking-tight';
+          }
+          if (begBox) begBox.classList.add('hidden');
+          if (subBox) subBox.classList.add('hidden');
+        } else {
+          if (rateSpan) rateSpan.innerText = m.rsPct.toFixed(2);
+          if (instSpan) {
+            instSpan.innerText = fmt(m.monthly) + ' ฿ / เดือน';
+            instSpan.className = `text-xl font-extrabold ${cardTextColors[idx % cardTextColors.length]} tracking-tight`;
+          }
+          if (begBox) {
+            if (p.isBeginning) {
+              begBox.classList.remove('hidden');
+              document.getElementById(`sidebar-beg-amt-${p.id}`).innerText = fmt(m.beginningInstallment) + ' ฿';
+              document.getElementById(`sidebar-driveoff-${p.id}`).innerText = fmt(m.driveOffTotal) + ' ฿';
+            } else {
+              begBox.classList.add('hidden');
+            }
+          }
+          if (subBox) {
+            if (p.isSubsidy) {
+              subBox.classList.remove('hidden');
+              document.getElementById(`sidebar-sub-amt-${p.id}`).innerText = fmt(m.subsidyAmt) + ' ฿';
+            } else {
+              subBox.classList.add('hidden');
+            }
           }
         }
       });
     }
 
-    // ==================== HANDLERS & FORMULA: BALLOON (TABLE-DRIVEN COMM FILTERING) ====================
+    // ==================== HANDLERS & FORMULA: BALLOON (STRICT TABLE-DRIVEN) ====================
 
     function selectBalloonFinanceCompany(financeName) {
       const bp = state.balloonPlan;
@@ -4826,10 +4843,6 @@
       if (pctInput && document.activeElement !== pctInput) pctInput.value = bp.downPct;
       if (amtInput) amtInput.value = fmt(bp.downAmt);
 
-      if (bp.customRate === '') {
-        const rateInput = document.getElementById('balloon-rateInput');
-        if (rateInput) rateInput.value = getAutoRateForPlan(bp).toFixed(2);
-      }
       calculateBalloon();
     }
 
@@ -4847,10 +4860,6 @@
 
       const pctInput = document.getElementById('balloon-downPct');
       if (pctInput) pctInput.value = bp.downPct;
-      if (bp.customRate === '') {
-        const rateInput = document.getElementById('balloon-rateInput');
-        if (rateInput) rateInput.value = getAutoRateForPlan(bp).toFixed(2);
-      }
       calculateBalloon();
     }
 
@@ -4862,7 +4871,7 @@
     }
 
     function updateBalloonCustomRate(rateVal) {
-      state.balloonPlan.customRate = rateVal;
+      state.balloonPlan.customRate = String(rateVal).trim() === '' ? '' : rateVal;
       calculateBalloon();
     }
 
@@ -4883,30 +4892,53 @@
         if (pctInput && document.activeElement !== pctInput) pctInput.value = bp.downPct;
       }
 
-      // บังคับใช้เฉพาะค่าคอมที่มีตัวเลขจริงในตาราง Easy Pay ของขั้นดาวน์นั้น
       enforceAllowedCommForPlan(bp);
 
       const n = 60;
       const autoRate = getAutoRateForPlan(bp);
+      const commInfo = getAllowedCommInfoForPlan(bp);
+      const hasProgram = bp.customRate !== '' ? true : (commInfo.hasProgram && autoRate !== null);
       const rPct = bp.customRate !== '' ? num(bp.customRate) : autoRate;
-      const rDec = rPct / 100;
 
       const balloonAmt = Math.round(priceNoAcc * (num(bp.balloonPct) / 100));
-
       const downMain = Math.min(Math.max(num(bp.downAmt), 0), priceWithAcc);
       const financeMain = Math.max(priceWithAcc - downMain, 0);
+      const downNoAcc = bp.downMode === 'pct' ? Math.round(priceNoAcc * (num(bp.downPct) / 100)) : Math.min(downMain, priceNoAcc);
+      const financeNoAcc = Math.max(priceNoAcc - downNoAcc, 0);
+
+      if (!hasProgram || rPct === null) {
+        return {
+          priceNoAcc,
+          accessories,
+          priceWithAcc,
+          n,
+          rPct: null,
+          balloonPct: num(bp.balloonPct),
+          balloonAmt,
+          downMain,
+          downPct: bp.downPct,
+          financeMain,
+          rawMonthlyMain: 0,
+          monthlyMain: 0,
+          downNoAcc,
+          financeNoAcc,
+          monthlyNoAcc: 0,
+          commAmt: 0,
+          isInvalid: false,
+          hasProgram: false
+        };
+      }
+
+      const rDec = rPct / 100;
       const rawMonthlyMain = n > 0 ? (((n + 1) / 12) * financeMain * rDec + (financeMain - balloonAmt)) / n : 0;
       const monthlyMain = Math.ceil(rawMonthlyMain);
 
-      const downNoAcc = bp.downMode === 'pct' ? Math.round(priceNoAcc * (num(bp.downPct) / 100)) : Math.min(downMain, priceNoAcc);
-      const financeNoAcc = Math.max(priceNoAcc - downNoAcc, 0);
       const rawMonthlyNoAcc = n > 0 ? (((n + 1) / 12) * financeNoAcc * rDec + (financeNoAcc - balloonAmt)) / n : 0;
       const monthlyNoAcc = Math.ceil(rawMonthlyNoAcc);
 
       const isInvalid = financeMain > 0 && (rawMonthlyMain <= 0 || balloonAmt >= financeMain);
 
-      const commInfo = getAllowedCommInfoForPlan(bp);
-      const commPctVal = (commInfo.hasProgram && bp.commPct !== undefined ? num(bp.commPct) : 0) / 100;
+      const commPctVal = (bp.commPct !== undefined ? num(bp.commPct) : 0) / 100;
       const totalInterestBalloon = Math.max((rawMonthlyMain * n + balloonAmt) - financeMain, 0);
       const commAmt = (!isInvalid && financeMain > 0 && commPctVal > 0)
         ? Math.ceil((totalInterestBalloon * commPctVal) / 1.07)
@@ -4930,7 +4962,7 @@
         monthlyNoAcc,
         commAmt,
         isInvalid,
-        hasProgram: commInfo.hasProgram
+        hasProgram: true
       };
     }
 
@@ -4941,17 +4973,19 @@
 
       const rateInput = document.getElementById('balloon-rateInput');
       if (rateInput && bp.customRate === '' && document.activeElement !== rateInput) {
-        rateInput.value = b.rPct.toFixed(2);
+        rateInput.value = b.hasProgram && b.rPct !== null ? b.rPct.toFixed(2) : '';
       }
       const rateHint = document.getElementById('balloon-rateHint');
       if (rateHint) {
-        rateHint.innerText = `(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)`;
+        rateHint.innerText = b.hasProgram
+          ? `(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)`
+          : '(ไม่มีเรทในตาราง — เปลี่ยนเงินดาวน์ หรือพิมพ์ดอกเบี้ยเอง)';
       }
 
       const noProgMsg = (cp && b.priceWithAcc > 0 && !b.hasProgram)
         ? `ดาวน์ ${bp.downPct}% ไม่มีโปรแกรมในแคมเปญนี้`
         : '';
-      const minLoanMsg = getMinLoanWarningMessage(cp, b.financeMain, b.priceWithAcc);
+      const minLoanMsg = b.hasProgram ? getMinLoanWarningMessage(cp, b.financeMain, b.priceWithAcc) : '';
       const warnMsg = noProgMsg || minLoanMsg;
 
       const warnBox = document.getElementById('balloon-minLoanWarn');
@@ -4989,7 +5023,7 @@
           ? `แผนหลัก: รวมอุปกรณ์ (${b.n} เดือน)`
           : `แผนหลัก (ผ่อน ${b.n} เดือน)`;
       }
-      if (document.getElementById('balMainRate')) document.getElementById('balMainRate').innerText = b.rPct.toFixed(2);
+      if (document.getElementById('balMainRate')) document.getElementById('balMainRate').innerText = b.hasProgram && b.rPct !== null ? b.rPct.toFixed(2) : '-';
       if (document.getElementById('balMainDownPct')) document.getElementById('balMainDownPct').innerText = b.downPct;
       if (document.getElementById('balMainDownAmt')) document.getElementById('balMainDownAmt').innerText = fmt(b.downMain);
       if (document.getElementById('balMainFinanceAmt')) document.getElementById('balMainFinanceAmt').innerText = fmt(b.financeMain);
@@ -4997,7 +5031,13 @@
 
       const warnBanner = document.getElementById('balloonWarningBanner');
       const monthlyEl = document.getElementById('balMainMonthly');
-      if (b.isInvalid) {
+      if (!b.hasProgram) {
+        if (warnBanner) warnBanner.classList.add('hidden');
+        if (monthlyEl) {
+          monthlyEl.innerText = 'ไม่มีโปรแกรมในเงื่อนไขนี้';
+          monthlyEl.className = 'text-sm font-extrabold text-rose-400 tracking-tight';
+        }
+      } else if (b.isInvalid) {
         if (warnBanner) warnBanner.classList.remove('hidden');
         if (monthlyEl) {
           monthlyEl.innerText = 'บอลลูนสูงเกินยอดจัด';
@@ -5013,7 +5053,7 @@
 
       const noAccCard = document.getElementById('balNoAccCard');
       if (noAccCard) {
-        if (b.accessories > 0) {
+        if (b.accessories > 0 && b.hasProgram) {
           noAccCard.classList.remove('hidden');
           document.getElementById('balNoAccFinance').innerText = fmt(b.financeNoAcc);
           document.getElementById('balNoAccMonthly').innerText = b.monthlyNoAcc > 0 ? `${fmt(b.monthlyNoAcc)} ฿ / เดือน` : 'บอลลูนสูงเกินยอดจัด';
@@ -5165,7 +5205,6 @@
             return state.campaigns[idx];
           }
         }
-        // โหมดอัตโนมัติ: เลือกแคมเปญ Easy Pay ของรุ่นนั้น โดยให้ความสำคัญกับ Easy Pay ปกติ (ไม่แถมประกัน) และมีคอลัมน์คอม 8% ก่อน
         const pool = getFilteredCampaignsForPlan(pl.financeText, 'balloon', modelName);
         if (pool.length === 0) return null;
         const exactEasy8 = pool.find(({ cp }) => !cp.freeInsurance && (Number(cp.easyCommCol1) === 8 || Number(cp.easyCommCol2) === 8));
@@ -5176,12 +5215,10 @@
         return (nonFree || pool[0]).cp;
       }
 
-      // โหมดแคมเปญปกติ (48-96 เดือน)
       if (totalSelectedModelsCount <= 1 && pl.campaignIdx >= 0 && state.campaigns[pl.campaignIdx] && !state.campaigns[pl.campaignIdx].isEasyPay) {
         return state.campaigns[pl.campaignIdx];
       }
 
-      // โหมดอัตโนมัติตามรุ่นรถ: ดึงตาราง GENRATE คอม 8% ของรุ่นนั้นก่อนเสมอ
       const pool = getFilteredCampaignsForPlan(pl.financeText, 'standard', modelName);
       if (pool.length === 0) return null;
 
@@ -5200,7 +5237,6 @@
       const raw = cp.rates[tier][month];
       if (!isValidRateValue(raw)) return NaN;
       let rateVal = parseFloat(raw);
-      // ปรับเรทดอกเบี้ยให้เป็นฐานคอม 8% อัตโนมัติ (หากตารางไม่ได้ตั้ง ComPct = 8)
       const baseComm = cp.comPct !== undefined ? Number(cp.comPct) : 8;
       if (baseComm !== 8) {
         const opts = (Array.isArray(cp.commOptions) && cp.commOptions.length > 0)
@@ -5534,7 +5570,7 @@
       }
     }
 
-    // ==================== MARGIN & COMMISSION POPUP ENGINE (กรอง % คอมตามตารางจริงอัตโนมัติ) ====================
+    // ==================== MARGIN & COMMISSION POPUP ENGINE (ล็อกไม่คิดคอมเมื่อไม่มีโปรแกรม) ====================
 
     function getCheckedAccessoriesTotal() {
       const modelAcc = getAccessoriesForCurrentModel();
@@ -5804,8 +5840,9 @@
 
       enforceAllowedCommForPlan(activePlanObj);
       const commInfo = getAllowedCommInfoForPlan(activePlanObj);
+      const isNoProgram = activePlanObj.customRate === '' && !commInfo.hasProgram;
 
-      if (commInfo.allowed.length === 0) {
+      if (commInfo.allowed.length === 0 || isNoProgram) {
         pctSel.innerHTML = `<option value="0" selected>ไม่มีโปรแกรม (0%)</option>`;
         pctSel.disabled = true;
       } else {
@@ -5873,23 +5910,11 @@
         plan.commPct = newPct;
         plan.customRate = '';
         enforceAllowedCommForPlan(plan);
-        const effRate = getEffectiveRateAfterBeginning(plan);
-        const rateInput = document.getElementById(`plan-${plan.id}-rateInput`);
-        if (rateInput) rateInput.value = effRate.toFixed(2);
-        const rateHint = document.getElementById(`plan-${plan.id}-rateHint`);
-        const commDiff = getCommRateAdjustment(plan);
-        const baseRate = getBaseRateBeforeBeginning(plan);
-        if (rateHint) {
-          rateHint.innerText = `(คอม ${plan.commPct}% ${commDiff !== 0 ? `[${commDiff > 0 ? '+' : ''}${commDiff.toFixed(2)}%] ` : ''}${plan.isBeginning ? `• หัก Beginning -0.10% จาก ${baseRate.toFixed(2)}% เหลือ ${effRate.toFixed(2)}%` : '• อัตโนมัติตามตาราง/แก้ได้'})`;
-        }
         calculateAll();
       } else if (state.step === 'balloon') {
         state.balloonPlan.commPct = newPct;
         state.balloonPlan.customRate = '';
         enforceAllowedCommForPlan(state.balloonPlan);
-        const autoRate = getAutoRateForPlan(state.balloonPlan);
-        const rateInput = document.getElementById('balloon-rateInput');
-        if (rateInput) rateInput.value = autoRate.toFixed(2);
         calculateBalloon();
       }
       calculateMarginModal();
@@ -6006,8 +6031,12 @@
         planLabel = plan.name;
         subsidyAmt = m.subsidyAmt;
         commAmt = m.commAmt;
-        const commDiff = getCommRateAdjustment(plan);
-        rateHintText = `💡 ${plan.name}: คอม ${plan.commPct}% (${commDiff >= 0 ? '+' : ''}${commDiff.toFixed(2)}%) → ดอกเบี้ยแผน ${m.rsPct.toFixed(2)}% | ยอดจัด ${fmt(m.finance)} ฿`;
+        if (m.hasProgram) {
+          const commDiff = getCommRateAdjustment(plan);
+          rateHintText = `💡 ${plan.name}: คอม ${plan.commPct}% (${commDiff >= 0 ? '+' : ''}${commDiff.toFixed(2)}%) → ดอกเบี้ยแผน ${m.rsPct.toFixed(2)}% | ยอดจัด ${fmt(m.finance)} ฿`;
+        } else {
+          rateHintText = `⚠️ ${plan.name}: ดาวน์ ${plan.downPct}% ไม่มีโปรแกรมผ่อน ${plan.term} เดือนในแคมเปญนี้`;
+        }
       } else if (state.step === 'balloon') {
         const b = computeBalloonDetails();
         planLabel = 'แผนบอลลูน';
@@ -6375,7 +6404,13 @@
         const activePlans = state.plans.filter(p => p.isOpen);
         const primaryPlan = activePlans.length > 0 ? activePlans[0] : state.plans[0];
         const pm = computePlanMetrics(primaryPlan, finalNet);
-        deliveryNet = getDeliveryLineItems('calc', '', pm.down, primaryPlan.isBeginning ? pm.beginningInstallment : 0, primaryPlan.name).netDelivery;
+        deliveryNet = getDeliveryLineItems(
+          'calc',
+          '',
+          pm.down,
+          primaryPlan.isBeginning && pm.hasProgram ? pm.beginningInstallment : 0,
+          primaryPlan.name
+        ).netDelivery;
       } else if (state.step === 'balloon') {
         const b = computeBalloonDetails();
         deliveryNet = getDeliveryLineItems('balloon', '', b.downMain).netDelivery;
@@ -6500,6 +6535,10 @@
           const cp = p.campaignIdx >= 0 ? state.campaigns[p.campaignIdx] : null;
           const finLabel = p.customFinanceText || cp?.finance || 'ไฟแนนซ์มาตรฐาน';
           const campTitle = p.customCampaignText || cp?.campaignName || '';
+          const rateCell = m.hasProgram && m.rsPct !== null ? `${m.rsPct.toFixed(2)}%` : '-';
+          const monthlyCell = m.hasProgram
+            ? `${fmt(m.monthly)} ฿`
+            : `<span class="text-rose-600 text-[9.5px]">ไม่มีโปรแกรม</span>`;
           return `
             <tr class="even:bg-slate-50">
               <td class="border border-slate-300 py-1 px-2 text-left font-bold text-slate-800">
@@ -6509,9 +6548,9 @@
               <td class="border border-slate-300 py-1 px-2 font-semibold">${p.term} เดือน</td>
               <td class="border border-slate-300 py-1 px-2 text-right font-semibold">${fmt(m.down)} <span class="text-slate-500 text-[9px]">(${p.downPct}%)</span></td>
               <td class="border border-slate-300 py-1 px-2 text-right font-semibold">${fmt(m.finance)}</td>
-              <td class="border border-slate-300 py-1 px-2 font-bold text-slate-700">${m.rsPct.toFixed(2)}%</td>
-              <td class="border border-slate-300 py-1 px-2 text-right font-extrabold text-blue-700 bg-blue-50/50">${fmt(m.monthly)} ฿</td>
-              ${hasAnyBeginning ? `<td class="border border-slate-300 py-1 px-2 text-right font-semibold text-indigo-700">${p.isBeginning ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
+              <td class="border border-slate-300 py-1 px-2 font-bold text-slate-700">${rateCell}</td>
+              <td class="border border-slate-300 py-1 px-2 text-right font-extrabold text-blue-700 bg-blue-50/50">${monthlyCell}</td>
+              ${hasAnyBeginning ? `<td class="border border-slate-300 py-1 px-2 text-right font-semibold text-indigo-700">${p.isBeginning && m.hasProgram ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
             </tr>
           `;
         }).join('');
@@ -6542,7 +6581,7 @@
           'calc',
           `เงินดาวน์ตั้งต้น (อ้างอิง${primaryPlan.name} ดาวน์ ${primaryPlan.downPct}%)`,
           pm.down,
-          primaryPlan.isBeginning ? pm.beginningInstallment : 0,
+          primaryPlan.isBeginning && pm.hasProgram ? pm.beginningInstallment : 0,
           primaryPlan.name
         );
         deliverySectionHtml = renderTemplate1DeliveryTable(deliv);
@@ -6559,6 +6598,10 @@
         const cp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
         const finLabel = state.balloonPlan.customFinanceText || cp?.finance || 'ไฟแนนซ์มาตรฐาน';
         const campLabel = state.balloonPlan.customCampaignText || cp?.campaignName || '';
+        const bRateStr = b.hasProgram && b.rPct !== null ? `${b.rPct.toFixed(2)}%` : '-';
+        const bMonthlyStr = !b.hasProgram
+          ? '<span class="text-rose-600">ไม่มีโปรแกรมในเงื่อนไขนี้</span>'
+          : (b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿/เดือน');
 
         modeSectionHtml = `
           <h3 class="font-bold text-slate-800 mb-1 text-[10.5px] flex items-center gap-1.5">
@@ -6582,17 +6625,17 @@
                 <td class="border border-slate-300 py-1.5 px-2 font-semibold">${b.n} เดือน</td>
                 <td class="border border-slate-300 py-1.5 px-2 text-right font-semibold">${fmt(b.downMain)} ฿</td>
                 <td class="border border-slate-300 py-1.5 px-2 text-right font-semibold">${fmt(b.financeMain)} ฿</td>
-                <td class="border border-slate-300 py-1.5 px-2 font-bold">${b.rPct.toFixed(2)}%</td>
-                <td class="border border-slate-300 py-1.5 px-2 text-right font-extrabold text-purple-700">${b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿/เดือน'}</td>
+                <td class="border border-slate-300 py-1.5 px-2 font-bold">${bRateStr}</td>
+                <td class="border border-slate-300 py-1.5 px-2 text-right font-extrabold text-purple-700">${bMonthlyStr}</td>
                 <td class="border border-slate-300 py-1.5 px-2 text-right font-extrabold text-slate-900">${fmt(b.balloonAmt)} ฿</td>
               </tr>
-              ${b.accessories > 0 ? `
+              ${b.accessories > 0 && b.hasProgram ? `
                 <tr>
                   <td class="border border-slate-300 py-1 px-2 text-left font-semibold text-slate-600">เปรียบเทียบ: ไม่บวกอุปกรณ์</td>
                   <td class="border border-slate-300 py-1 px-2">${b.n} เดือน</td>
                   <td class="border border-slate-300 py-1 px-2 text-right">${fmt(b.downNoAcc)} ฿</td>
                   <td class="border border-slate-300 py-1 px-2 text-right">${fmt(b.financeNoAcc)} ฿</td>
-                  <td class="border border-slate-300 py-1 px-2">${b.rPct.toFixed(2)}%</td>
+                  <td class="border border-slate-300 py-1 px-2">${bRateStr}</td>
                   <td class="border border-slate-300 py-1 px-2 text-right font-bold text-slate-800">${b.monthlyNoAcc > 0 ? fmt(b.monthlyNoAcc) + ' ฿/เดือน' : '-'}</td>
                   <td class="border border-slate-300 py-1 px-2 text-right font-bold text-slate-800">${fmt(b.balloonAmt)} ฿</td>
                 </tr>
@@ -6771,6 +6814,10 @@
           const finLabel = p.customFinanceText || cp?.finance || 'ไฟแนนซ์มาตรฐาน';
           const campTitle = p.customCampaignText || cp?.campaignName || '';
           const isPrimary = idx === 0;
+          const rateCell = m.hasProgram && m.rsPct !== null ? `${m.rsPct.toFixed(2)}%` : '-';
+          const monthlyCell = m.hasProgram
+            ? `${fmt(m.monthly)} ฿`
+            : `<span class="text-rose-600 text-[9.5px]">ไม่มีโปรแกรม</span>`;
           return `
             <tr class="${isPrimary ? 'bg-slate-50/90' : 'bg-white'} border-b border-slate-200">
               <td class="py-1.5 px-2.5 text-left">
@@ -6782,9 +6829,9 @@
               <td class="py-1.5 px-2 text-center font-semibold text-slate-800">${p.term} เดือน</td>
               <td class="py-1.5 px-2 text-right font-semibold text-slate-800">${fmt(m.down)} <span class="text-slate-400 text-[8.5px]">(${p.downPct}%)</span></td>
               <td class="py-1.5 px-2 text-right font-semibold text-slate-800">${fmt(m.finance)}</td>
-              <td class="py-1.5 px-2 text-center font-bold text-slate-700">${m.rsPct.toFixed(2)}%</td>
-              <td class="py-1.5 px-2.5 text-right font-extrabold text-slate-950 text-[11px] bg-amber-50/70">${fmt(m.monthly)} ฿</td>
-              ${hasAnyBeginning ? `<td class="py-1.5 px-2 text-right font-semibold text-slate-700">${p.isBeginning ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
+              <td class="py-1.5 px-2 text-center font-bold text-slate-700">${rateCell}</td>
+              <td class="py-1.5 px-2.5 text-right font-extrabold text-slate-950 text-[11px] bg-amber-50/70">${monthlyCell}</td>
+              ${hasAnyBeginning ? `<td class="py-1.5 px-2 text-right font-semibold text-slate-700">${p.isBeginning && m.hasProgram ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
             </tr>
           `;
         }).join('');
@@ -6818,7 +6865,7 @@
           'calc',
           `เงินดาวน์ตั้งต้น (${primaryPlan.name} • ดาวน์ ${primaryPlan.downPct}%)`,
           pm.down,
-          primaryPlan.isBeginning ? pm.beginningInstallment : 0,
+          primaryPlan.isBeginning && pm.hasProgram ? pm.beginningInstallment : 0,
           primaryPlan.name
         );
       } else if (state.step === 'balloon') {
@@ -6827,6 +6874,10 @@
         const cp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
         const finLabel = state.balloonPlan.customFinanceText || cp?.finance || 'ไฟแนนซ์มาตรฐาน';
         const campLabel = state.balloonPlan.customCampaignText || cp?.campaignName || '';
+        const bRateStr = b.hasProgram && b.rPct !== null ? `${b.rPct.toFixed(2)}%` : '-';
+        const bMonthlyStr = !b.hasProgram
+          ? '<span class="text-rose-600 text-[9.5px]">ไม่มีโปรแกรม</span>'
+          : (b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿');
 
         modeSectionHtml = `
           <div class="mb-2.5">
@@ -6852,17 +6903,17 @@
                   <td class="py-1.5 px-2 text-center font-semibold">${b.n} เดือน</td>
                   <td class="py-1.5 px-2 text-right font-semibold">${fmt(b.downMain)}</td>
                   <td class="py-1.5 px-2 text-right font-semibold">${fmt(b.financeMain)}</td>
-                  <td class="py-1.5 px-2 text-center font-bold">${b.rPct.toFixed(2)}%</td>
-                  <td class="py-1.5 px-2.5 text-right font-extrabold text-slate-950 text-[11px] bg-amber-50/70">${b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿'}</td>
+                  <td class="py-1.5 px-2 text-center font-bold">${bRateStr}</td>
+                  <td class="py-1.5 px-2.5 text-right font-extrabold text-slate-950 text-[11px] bg-amber-50/70">${bMonthlyStr}</td>
                   <td class="py-1.5 px-2.5 text-right font-extrabold text-slate-900">${fmt(b.balloonAmt)} ฿</td>
                 </tr>
-                ${b.accessories > 0 ? `
+                ${b.accessories > 0 && b.hasProgram ? `
                   <tr class="bg-white border-b border-slate-200">
                     <td class="py-1.5 px-2.5 text-left font-medium text-slate-600">เปรียบเทียบ: ไม่บวกอุปกรณ์</td>
                     <td class="py-1.5 px-2 text-center">${b.n} เดือน</td>
                     <td class="py-1.5 px-2 text-right">${fmt(b.downNoAcc)}</td>
                     <td class="py-1.5 px-2 text-right">${fmt(b.financeNoAcc)}</td>
-                    <td class="py-1.5 px-2 text-center">${b.rPct.toFixed(2)}%</td>
+                    <td class="py-1.5 px-2 text-center">${bRateStr}</td>
                     <td class="py-1.5 px-2.5 text-right font-bold text-slate-800">${b.monthlyNoAcc > 0 ? fmt(b.monthlyNoAcc) + ' ฿' : '-'}</td>
                     <td class="py-1.5 px-2.5 text-right font-bold text-slate-800">${fmt(b.balloonAmt)} ฿</td>
                   </tr>
@@ -7029,6 +7080,10 @@
           const cp = p.campaignIdx >= 0 ? state.campaigns[p.campaignIdx] : null;
           const finLabel = p.customFinanceText || cp?.finance || 'ไฟแนนซ์มาตรฐาน';
           const campTitle = p.customCampaignText || cp?.campaignName || '';
+          const rateCell = m.hasProgram && m.rsPct !== null ? `${m.rsPct.toFixed(2)}%` : '-';
+          const monthlyCell = m.hasProgram
+            ? `${fmt(m.monthly)} <span class="text-[10px] font-bold">฿</span>`
+            : `<span class="text-rose-700 text-[10px]">ไม่มีโปรแกรม</span>`;
           return `
             <tr class="border-b border-[#e5dec9] bg-white">
               <td class="py-2 px-3 text-left font-bold text-slate-900 text-[10.5px]">
@@ -7041,11 +7096,11 @@
                 <div class="text-[9px] text-slate-500">(${p.downPct}%)</div>
               </td>
               <td class="py-2 px-2 text-center font-semibold text-slate-800">${fmt(m.finance)}</td>
-              <td class="py-2 px-2 text-center font-bold text-slate-800">${m.rsPct.toFixed(2)}%</td>
+              <td class="py-2 px-2 text-center font-bold text-slate-800">${rateCell}</td>
               <td class="py-2 px-3 text-right font-extrabold text-slate-950 text-[13px]" style="background: linear-gradient(135deg, #f3e7c9 0%, #e5d1a1 100%);">
-                ${fmt(m.monthly)} <span class="text-[10px] font-bold">฿</span>
+                ${monthlyCell}
               </td>
-              ${hasAnyBeginning ? `<td class="py-2 px-2 text-right font-semibold text-slate-700">${p.isBeginning ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
+              ${hasAnyBeginning ? `<td class="py-2 px-2 text-right font-semibold text-slate-700">${p.isBeginning && m.hasProgram ? fmt(m.beginningInstallment) + ' ฿' : '-'}</td>` : ''}
             </tr>
           `;
         }).join('');
@@ -7081,7 +7136,7 @@
           'calc',
           `เงินดาวน์ตั้งต้น (อ้างอิง${primaryPlan.name} ดาวน์ ${primaryPlan.downPct}%)`,
           pm.down,
-          primaryPlan.isBeginning ? pm.beginningInstallment : 0,
+          primaryPlan.isBeginning && pm.hasProgram ? pm.beginningInstallment : 0,
           primaryPlan.name
         );
       } else if (state.step === 'balloon') {
@@ -7090,6 +7145,10 @@
         const cp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
         const finLabel = state.balloonPlan.customFinanceText || cp?.finance || 'ไฟแนนซ์มาตรฐาน';
         const campLabel = state.balloonPlan.customCampaignText || cp?.campaignName || '';
+        const bRateStr = b.hasProgram && b.rPct !== null ? `${b.rPct.toFixed(2)}%` : '-';
+        const bMonthlyStr = !b.hasProgram
+          ? '<span class="text-rose-700 text-[10px]">ไม่มีโปรแกรม</span>'
+          : (b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿');
 
         modeSectionHtml = `
           <div class="mb-3">
@@ -7116,19 +7175,19 @@
                     <td class="py-2 px-2 text-center font-semibold">${b.n} เดือน</td>
                     <td class="py-2 px-2 text-center font-semibold">${fmt(b.downMain)} ฿</td>
                     <td class="py-2 px-2 text-center font-semibold">${fmt(b.financeMain)} ฿</td>
-                    <td class="py-2 px-2 text-center font-bold">${b.rPct.toFixed(2)}%</td>
+                    <td class="py-2 px-2 text-center font-bold">${bRateStr}</td>
                     <td class="py-2 px-3 text-right font-extrabold text-slate-950 text-[12px]" style="background: linear-gradient(135deg, #f3e7c9 0%, #e5d1a1 100%);">
-                      ${b.isInvalid ? 'บอลลูนสูงเกินยอดจัด' : fmt(b.monthlyMain) + ' ฿'}
+                      ${bMonthlyStr}
                     </td>
                     <td class="py-2 px-2.5 text-right font-extrabold text-slate-900">${fmt(b.balloonAmt)} ฿</td>
                   </tr>
-                  ${b.accessories > 0 ? `
+                  ${b.accessories > 0 && b.hasProgram ? `
                     <tr class="bg-slate-50/70">
                       <td class="py-1.5 px-3 text-left font-medium text-slate-600">เปรียบเทียบ: ไม่บวกอุปกรณ์</td>
                       <td class="py-1.5 px-2 text-center">${b.n} เดือน</td>
                       <td class="py-1.5 px-2 text-center">${fmt(b.downNoAcc)} ฿</td>
                       <td class="py-1.5 px-2 text-center">${fmt(b.financeNoAcc)} ฿</td>
-                      <td class="py-1.5 px-2 text-center">${b.rPct.toFixed(2)}%</td>
+                      <td class="py-1.5 px-2 text-center">${bRateStr}</td>
                       <td class="py-1.5 px-3 text-right font-bold text-slate-800">${b.monthlyNoAcc > 0 ? fmt(b.monthlyNoAcc) + ' ฿' : '-'}</td>
                       <td class="py-1.5 px-2.5 text-right font-bold text-slate-800">${fmt(b.balloonAmt)} ฿</td>
                     </tr>
@@ -7606,22 +7665,17 @@
       const box = document.getElementById('settingEasyPayBalloonBox');
       const stdWrap = document.getElementById('standardMatrixWrapper');
       const easyWrap = document.getElementById('easyPayMatrixWrapper');
-      const commCapBox = document.getElementById('settingCommCapBox');
       if (checked) {
         box?.classList.remove('hidden');
         box?.classList.add('flex');
         stdWrap?.classList.add('hidden');
         easyWrap?.classList.remove('hidden');
-        commCapBox?.classList.add('hidden');
-        commCapBox?.classList.remove('flex');
         syncEasyPayCommHeaders();
       } else {
         box?.classList.add('hidden');
         box?.classList.remove('flex');
         stdWrap?.classList.remove('hidden');
         easyWrap?.classList.add('hidden');
-        commCapBox?.classList.remove('hidden');
-        commCapBox?.classList.add('flex');
       }
     }
 
@@ -7699,9 +7753,6 @@
       const minLoanEnabled = document.getElementById('chkMinLoanEnabled')?.checked || false;
       const minLoanAmount = num(document.getElementById('campaignMinLoanAmountInput')?.value || 0);
       const isEasyPay = document.getElementById('chkEasyPayCampaign')?.checked || false;
-      const commCapEnabled = !isEasyPay && (document.getElementById('chkCommCapEnabled')?.checked || false);
-      const commCapDownPct = num(document.getElementById('campaignCommCapDownPctInput')?.value || 0);
-      const commCapMaxPct = num(document.getElementById('campaignCommCapMaxPctInput')?.value ?? 8);
       const balloonPct = num(document.getElementById('campaignBalloonPctInput')?.value ?? 30) || 30;
       const comPct = num(document.getElementById('campaignComPctInput')?.value ?? 8);
       const comMaxYears = Math.min(Math.max(num(document.getElementById('campaignComMaxYearsInput')?.value ?? 5), 1), 8);
@@ -7752,9 +7803,9 @@
         freeInsurance,
         minLoanEnabled,
         minLoanAmount,
-        commCapEnabled,
-        commCapDownPct,
-        commCapMaxPct,
+        commCapEnabled: false,
+        commCapDownPct: 0,
+        commCapMaxPct: 8,
         isEasyPay,
         balloonPct,
         comPct: isEasyPay ? easyCommCol1 : comPct,
@@ -8037,9 +8088,6 @@
                 FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
                 MinLoanEnabled: cp.minLoanEnabled ? 'TRUE' : 'FALSE',
                 MinLoanAmount: num(cp.minLoanAmount || 0),
-                CommCapEnabled: 'FALSE',
-                CommCapDownPct: 0,
-                CommCapMaxPct: 8,
                 IsEasyPay: 'TRUE',
                 BalloonPct: cp.balloonPct ?? 30,
                 ComPct: cp.easyCommCol1 ?? 8,
@@ -8063,9 +8111,6 @@
                 FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
                 MinLoanEnabled: cp.minLoanEnabled ? 'TRUE' : 'FALSE',
                 MinLoanAmount: num(cp.minLoanAmount || 0),
-                CommCapEnabled: cp.commCapEnabled ? 'TRUE' : 'FALSE',
-                CommCapDownPct: num(cp.commCapDownPct || 0),
-                CommCapMaxPct: num(cp.commCapMaxPct ?? 8),
                 IsEasyPay: 'FALSE',
                 BalloonPct: 30,
                 ComPct: cp.comPct ?? 8,
@@ -8087,7 +8132,6 @@
           rows.push({
             Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'GENRATE', CarModel: 'EXAMPLE',
             MG_Type: 'normal', FreeInsurance: 'FALSE', MinLoanEnabled: 'FALSE', MinLoanAmount: 0,
-            CommCapEnabled: 'FALSE', CommCapDownPct: 0, CommCapMaxPct: 8,
             IsEasyPay: 'FALSE', BalloonPct: 30, ComPct: 8, ComMaxYears: 5,
             CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%',
             M24: 1.99, M36: 2.09, M48: 2.19, M60: 2.39, M72: 2.59, M84: 2.89, M96: '-'
@@ -8211,9 +8255,6 @@
             const freeInsurance = String(r.FreeInsurance || 'FALSE').toUpperCase() === 'TRUE';
             const minLoanEnabled = String(r.MinLoanEnabled || 'FALSE').toUpperCase() === 'TRUE';
             const minLoanAmount = num(r.MinLoanAmount || 0);
-            const commCapEnabled = !isEasyPay && String(r.CommCapEnabled || 'FALSE').toUpperCase() === 'TRUE';
-            const commCapDownPct = num(r.CommCapDownPct || 0);
-            const commCapMaxPct = r.CommCapMaxPct !== undefined ? num(r.CommCapMaxPct) : 8;
             if (!finance) return;
 
             const key = `${getFinanceFolderKey(finance)}||${campaignName}||${getModelFolderKey(carModel)}||${isEasyPay ? '1' : '0'}`;
@@ -8230,9 +8271,9 @@
                 freeInsurance,
                 minLoanEnabled,
                 minLoanAmount,
-                commCapEnabled,
-                commCapDownPct,
-                commCapMaxPct,
+                commCapEnabled: false,
+                commCapDownPct: 0,
+                commCapMaxPct: 8,
                 isEasyPay,
                 balloonPct: num(r.BalloonPct ?? 30) || 30,
                 comPct: num(r.ComPct ?? 8),
@@ -8605,7 +8646,6 @@
         const campRows = (data.campaigns || []).map(cp => ({
           Brand: cp.brand, Finance: cp.finance, CampaignName: cp.campaignName, CarModel: cp.carModel,
           MG_Type: cp.mgType, FreeInsurance: cp.freeInsurance, MinLoanEnabled: cp.minLoanEnabled, MinLoanAmount: cp.minLoanAmount,
-          CommCapEnabled: cp.commCapEnabled, CommCapDownPct: cp.commCapDownPct, CommCapMaxPct: cp.commCapMaxPct,
           IsEasyPay: cp.isEasyPay, BalloonPct: cp.balloonPct, ComPct: cp.comPct, ComMaxYears: cp.comMaxYears,
           RatesJSON: JSON.stringify(cp.isEasyPay ? cp.easyRates : cp.rates)
         }));
