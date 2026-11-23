@@ -715,11 +715,11 @@
 
     function createDefaultPriceListState() {
       return {
-        selectedModels: [],       // รองรับการเลือกหลายรุ่นพร้อมกัน (เช่น ['SERENA', 'X-TRAIL'])
-        selectedCarIds: [],       // รายการรุ่นย่อยที่ติ๊กเลือก
-        financeText: '',          // บริษัทไฟแนนซ์ที่เลือก
-        campaignIdx: -1,          // -1 = อัตโนมัติตามรุ่นรถ (ใช้เลือกเฉพาะกรณีเลือกรถ 1 รุ่น)
-        easyPayMode: 'none',      // 'none' = ไม่แสดงคอลัมน์ Easy Pay | 'auto' = อัตโนมัติตามรุ่นรถ | '<index>' = แคมเปญเฉพาะ
+        selectedModels: [],
+        selectedCarIds: [],
+        financeText: '',
+        campaignIdx: -1,
+        easyPayMode: 'none',
         qrCodeDataUrl: ''
       };
     }
@@ -1117,6 +1117,9 @@
       cp.freeInsurance = Boolean(cp.freeInsurance);
       cp.minLoanEnabled = Boolean(cp.minLoanEnabled);
       cp.minLoanAmount = num(cp.minLoanAmount || 0);
+      cp.commCapEnabled = Boolean(cp.commCapEnabled);
+      cp.commCapDownPct = num(cp.commCapDownPct || 0);
+      cp.commCapMaxPct = cp.commCapMaxPct !== undefined ? num(cp.commCapMaxPct) : 8;
       if (cp.balloonPct === undefined) cp.balloonPct = 30;
       if (cp.mgType === undefined) cp.mgType = 'normal';
       if (cp.comPct === undefined) cp.comPct = cp.baseCommPct !== undefined ? num(cp.baseCommPct) : 8;
@@ -1804,13 +1807,12 @@
         if (!validMonths.includes(Number(p.term))) {
           p.term = validMonths[Math.min(idx, validMonths.length - 1)] || validMonths[0] || 48;
         }
-        const cp = p.campaignIdx >= 0 ? state.campaigns[p.campaignIdx] : null;
         const maxYrs = getMaxCommYearsForCampaign(p.campaignIdx);
         if (!p.commYears || p.commYears > maxYrs) {
           p.commYears = getDefaultCommYearsForTerm(p.term, p.campaignIdx);
         }
-        if (cp && Array.isArray(cp.commOptions) && !cp.commOptions.includes(Number(p.commPct))) {
-          p.commPct = cp.comPct ?? 8;
+        if (typeof enforceAllowedCommForPlan === 'function') {
+          enforceAllowedCommForPlan(p);
         }
       });
 
@@ -1819,12 +1821,8 @@
         state.balloonPlan.campaignIdx = easyPool.length > 0 ? easyPool[0].index : -1;
       }
       state.balloonPlan.term = 60;
-      const bCp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
-      if (bCp && bCp.isEasyPay) {
-        const allowedEasy = [Number(bCp.easyCommCol1 ?? 8), Number(bCp.easyCommCol2 ?? 16)];
-        if (!allowedEasy.includes(Number(state.balloonPlan.commPct))) {
-          state.balloonPlan.commPct = allowedEasy[0];
-        }
+      if (typeof enforceAllowedCommForPlan === 'function') {
+        enforceAllowedCommForPlan(state.balloonPlan);
       }
       const maxBalYrs = getMaxCommYearsForCampaign(state.balloonPlan.campaignIdx);
       if (!state.balloonPlan.commYears || state.balloonPlan.commYears > maxBalYrs) {
@@ -1844,7 +1842,6 @@
         }
       });
 
-      // กรอง selectedModels ให้เหลือเฉพาะรุ่นที่มีอยู่ในแบรนด์ปัจจุบัน
       state.priceList.selectedModels = (state.priceList.selectedModels || [])
         .map(m => formatEPower(m))
         .filter(m => seen.has(getModelFolderKey(m)));
@@ -2187,7 +2184,7 @@
       `;
     }
 
-    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน + แจ้งเตือนยอดจัดขั้นต่ำ) ====================
+    // ==================== 1. หน้าคำนวณผ่อนมาตรฐาน (4 แผน + แจ้งเตือนยอดจัดขั้นต่ำ & ขั้นดาวน์ไม่มีโปรแกรม) ====================
 
     function renderCalculator() {
       const cardColors = [
@@ -2297,7 +2294,7 @@
                           <input type="text" id="plan-${p.id}-downAmt" value="${fmt(p.downAmt)}" oninput="updatePlanDownAmt(${p.id}, this.value)" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                         </div>
 
-                        <!-- แถบแจ้งเตือนยอดจัดต่ำกว่าขั้นต่ำ -->
+                        <!-- แถบแจ้งเตือนยอดจัดต่ำกว่าขั้นต่ำ หรือ ขั้นดาวน์ไม่มีโปรแกรม -->
                         <div id="plan-${p.id}-minLoanWarn" class="hidden sm:col-span-2 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-700 text-xs font-extrabold flex items-center gap-2">
                           <span>⚠️</span>
                           <span id="plan-${p.id}-minLoanWarnText"></span>
@@ -2414,7 +2411,7 @@
       `;
     }
 
-    // ==================== 2. หน้าคำนวณ BALLOON (+ แจ้งเตือนยอดจัดขั้นต่ำ) ====================
+    // ==================== 2. หน้าคำนวณ BALLOON (+ แจ้งเตือนยอดจัดขั้นต่ำ & ขั้นดาวน์ไม่มีโปรแกรม) ====================
 
     function renderBalloonPage() {
       const bp = state.balloonPlan;
@@ -2503,7 +2500,7 @@
                     <input type="text" id="balloon-downAmt" value="${fmt(bp.downAmt)}" oninput="updateBalloonDownAmt(this.value)" onblur="this.value=fmt(num(this.value))" class="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-slate-800 outline-none">
                   </div>
 
-                  <!-- แถบแจ้งเตือนยอดจัดขั้นต่ำ (โหมดบอลลูน) -->
+                  <!-- แถบแจ้งเตือนยอดจัดขั้นต่ำ หรือ ขั้นดาวน์ไม่มีโปรแกรม (โหมดบอลลูน) -->
                   <div id="balloon-minLoanWarn" class="hidden sm:col-span-2 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-700 text-xs font-extrabold flex items-center gap-2">
                     <span>⚠️</span>
                     <span id="balloon-minLoanWarnText"></span>
@@ -2526,7 +2523,7 @@
 
                   <div class="sm:col-span-2">
                     <div class="flex justify-between items-center mb-1.5">
-                      <label class="text-xs font-medium text-slate-500">อัตราดอกเบี้ย r (% ต่อปี) <span class="text-purple-600 font-normal">(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)</span></label>
+                      <label class="text-xs font-medium text-slate-500">อัตราดอกเบี้ย r (% ต่อปี) <span id="balloon-rateHint" class="text-purple-600 font-normal">(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)</span></label>
                       ${bp.customRate !== '' ? `<button type="button" onclick="state.balloonPlan.customRate='';render();" class="text-[11px] text-purple-600 hover:underline font-semibold">↺ คืนค่าตามตาราง (${autoRate.toFixed(2)}%)</button>` : ''}
                     </div>
                     <input type="number" id="balloon-rateInput" step="0.01" value="${Number(displayRate).toFixed(2)}" oninput="updateBalloonCustomRate(this.value)" class="w-full bg-purple-50/40 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl p-3 text-sm font-bold text-purple-900 outline-none transition-colors">
@@ -2669,14 +2666,13 @@
       `;
     }
 
-    // ==================== 4. หน้าทำใบราคา (Price List Builder — เลือกได้หลายรุ่นพร้อมกัน + แคมเปญอัตโนมัติ) ====================
+    // ==================== 4. หน้าทำใบราคา (Price List Builder — อัตโนมัติ GENRATE คอม 8% + Easy Pay คอม 8%) ====================
 
     function renderPriceListPage() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR' };
       const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
       const pl = state.priceList;
 
-      // รวบรวมรายชื่อ Model ในแบรนด์นี้
       const uniqueModels = [];
       const modelMap = new Map();
       brandCars.forEach(c => {
@@ -2715,7 +2711,7 @@
               <div class="text-[11px] font-bold tracking-widest uppercase text-slate-400">PRICE LIST • ${brandObj.name}</div>
               <h2 class="text-xl sm:text-2xl font-extrabold mt-1">ทำใบราคา</h2>
               <p class="text-xs sm:text-sm text-slate-300 mt-1">
-                เลือกรถได้หลายรุ่นและแบบ/รุ่นย่อยได้หลายรายการ ระบบจับคู่ตารางดอกเบี้ย 48–96 เดือน และ Easy Pay ให้อัตโนมัติ พิมพ์หรือบันทึกรูป PNG/JPG และ PDF ได้ในกระดาษ A4 หน้าเดียว
+                เลือกรถได้หลายรุ่นและแบบ/รุ่นย่อยได้หลายรายการ โหมดอัตโนมัติจะดึงตาราง GENRATE คอม 8% และ Easy Pay คอม 8% ของแต่ละรุ่นมาคำนวณให้ทันที
               </p>
             </div>
 
@@ -2738,11 +2734,11 @@
                   <label class="block font-medium text-slate-500 mb-1">แคมเปญดอกเบี้ย (ผ่อน 48–96 เดือน)</label>
                   ${isMultiModel ? `
                     <div class="w-full bg-blue-50 border border-blue-200 rounded-xl p-2.5 font-extrabold text-blue-800 flex items-center gap-1.5">
-                      <span>✨</span> แคมเปญอัตโนมัติตามรุ่นรถ (${activeModelsList.length} รุ่น)
+                      <span>✨</span> อัตโนมัติตามรุ่นรถ: GENRATE คอม 8% (${activeModelsList.length} รุ่น)
                     </div>
                   ` : `
                     <select onchange="onPriceListCampaignChange(this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-rose-500 rounded-xl p-2.5 font-bold text-slate-800 outline-none cursor-pointer">
-                      <option value="-1" ${Number(pl.campaignIdx) === -1 ? 'selected' : ''}>-- แคมเปญอัตโนมัติตามรุ่นรถ --</option>
+                      <option value="-1" ${Number(pl.campaignIdx) === -1 ? 'selected' : ''}>-- อัตโนมัติตามรุ่นรถ (GENRATE คอม 8%) --</option>
                       ${stdCamps.map(it => `<option value="${it.index}" ${Number(pl.campaignIdx) === it.index ? 'selected' : ''}>${it.cp.finance} • ${getCampaignDisplayLabel(it.cp)}</option>`).join('')}
                     </select>
                   `}
@@ -2752,7 +2748,7 @@
                   <label class="block font-medium text-slate-500 mb-1">แคมเปญ EASY PAY (คอลัมน์ 1-60)</label>
                   <select onchange="onPriceListEasyPayModeChange(this.value)" class="w-full bg-amber-50/70 border border-amber-200 focus:border-amber-500 rounded-xl p-2.5 font-bold text-amber-950 outline-none cursor-pointer">
                     <option value="none" ${pl.easyPayMode === 'none' ? 'selected' : ''}>ไม่แสดงคอลัมน์ Easy Pay</option>
-                    <option value="auto" ${pl.easyPayMode === 'auto' ? 'selected' : ''}>แสดง Easy Pay (อัตโนมัติตามรุ่นรถ)</option>
+                    <option value="auto" ${pl.easyPayMode === 'auto' ? 'selected' : ''}>แสดง Easy Pay (อัตโนมัติ คอม 8%)</option>
                     ${!isMultiModel ? easyCamps.map(it => `<option value="${it.index}" ${String(pl.easyPayMode) === String(it.index) ? 'selected' : ''}>${it.cp.finance} • ${getCampaignDisplayLabel(it.cp)}</option>`).join('') : ''}
                   </select>
                 </div>
@@ -2761,7 +2757,6 @@
 
             <!-- ส่วนที่ 1 & 2: เลือกรถได้หลายรุ่น (ซ้าย) + เลือกแบบ/รุ่นย่อยแยกตามรุ่น (ขวา) -->
             <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-              <!-- 1. เลือกรถ (เลือกได้มากกว่า 1 รุ่น) -->
               <div class="md:col-span-4 bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 flex flex-col">
                 <div class="flex items-center justify-between gap-2 mb-3">
                   <div class="flex items-center gap-2">
@@ -2791,7 +2786,6 @@
                 </div>
               </div>
 
-              <!-- 2. เลือกแบบ/รุ่น (แสดงทุกกลุ่มรุ่นที่ติ๊กเลือกจากข้อ 1) -->
               <div class="md:col-span-8 bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/90 flex flex-col">
                 <div class="flex items-center justify-between gap-2 mb-3">
                   <div class="flex items-center gap-2">
@@ -2928,7 +2922,7 @@
       `;
     }
 
-    // ==================== 5. หน้าตั้งค่าระบบ (Settings) ====================
+    // ==================== 5. หน้าตั้งค่าระบบ (Settings + เพิ่มจำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
@@ -2966,6 +2960,10 @@
       const isFreeInsChecked = editingCamp && editingCamp.freeInsurance ? true : false;
       const isMinLoanChecked = editingCamp && editingCamp.minLoanEnabled ? true : false;
       const minLoanVal = editingCamp && editingCamp.minLoanAmount ? editingCamp.minLoanAmount : '';
+      const isCommCapChecked = editingCamp && editingCamp.commCapEnabled ? true : false;
+      const commCapDownVal = editingCamp && editingCamp.commCapDownPct ? editingCamp.commCapDownPct : '';
+      const commCapMaxVal = editingCamp && editingCamp.commCapMaxPct !== undefined ? editingCamp.commCapMaxPct : 8;
+
       const specialDownVal = editingCamp && editingCamp.specialDownLabel !== undefined ? editingCamp.specialDownLabel : '-';
       const campMgType = editingCamp && editingCamp.mgType ? editingCamp.mgType : 'normal';
       const campComPct = editingCamp && editingCamp.comPct !== undefined ? editingCamp.comPct : 8;
@@ -3117,7 +3115,7 @@
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div>
                   <h3 class="font-bold text-slate-800 text-base">🏦 จัดการบริษัทไฟแนนซ์และตารางเรทดอกเบี้ย (Matrix)</h3>
-                  <p class="text-xs text-slate-500">แคมเปญที่ติ๊ก ☑️ EASY PAY (Balloon) จะแสดงเฉพาะหน้า 🎈 บอลลูน | ติ๊ก ☑️ แถมประกัน เพื่อให้ต้นทุนประกันเป็น 0 ในหน้ากำไร</p>
+                  <p class="text-xs text-slate-500">Easy Pay ช่องที่ใส่ "-" ระบบจะตัด % ค่าคอมนั้นออกอัตโนมัติ | ผ่อนมาตรฐานตั้งจำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์ได้</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" onclick="exportBrandExcelTemplate('campaigns')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
@@ -3310,18 +3308,34 @@
                 </div>
               </div>
 
-              <p class="text-[11px] text-slate-500 mt-1">* คำแนะนำแถวล่างสุด: พิมพ์ <strong>0%</strong> หรือพิมพ์ยอดเงินดาวน์เริ่มต้น เช่น <strong>5555</strong> หรือ <strong>19999</strong> (หากไฟแนนซ์นั้นไม่มีเรทดาวน์ต่ำกว่า 5% ให้ใส่ <strong>-</strong> ทั้งแถว)</p>
+              <p class="text-[11px] text-slate-500 mt-1">* คำแนะนำแถวล่างสุด: พิมพ์ <strong>0%</strong> หรือพิมพ์ยอดเงินดาวน์เริ่มต้น เช่น <strong>5555</strong> หรือ <strong>19999</strong> (หากไม่มีเรทให้ใส่ <strong>-</strong> ระบบจะตัดตัวเลือกคอมของช่องที่เป็น <strong>-</strong> ออกให้เองอัตโนมัติ)</p>
 
-              <!-- ช่องกำหนด "ยอดสินเชื่อต้องไม่ต่ำกว่า" + ปุ่มบันทึกแคมเปญ -->
-              <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2">
-                <div class="flex items-center gap-2.5">
-                  <input type="checkbox" id="chkMinLoanEnabled" ${isMinLoanChecked ? 'checked' : ''} class="w-4 h-4 accent-rose-600 rounded cursor-pointer mt-4">
-                  <div>
-                    <label for="chkMinLoanEnabled" class="block text-xs font-extrabold text-rose-700 mb-1 cursor-pointer">ยอดสินเชื่อต้องไม่ต่ำกว่า (บาท)</label>
-                    <input type="number" id="campaignMinLoanAmountInput" value="${minLoanVal}" placeholder="เช่น 580000 (เว้นว่าง = ไม่แจ้งเตือน)" class="w-56 bg-rose-50/40 border-2 border-rose-200 focus:border-rose-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-sm font-extrabold text-rose-800 outline-none">
+              <!-- ช่องกำหนดเงื่อนไขพิเศษ: ยอดสินเชื่อขั้นต่ำ + จำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์ + ปุ่มบันทึก -->
+              <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-3 pt-2">
+                <div class="flex flex-wrap items-end gap-4">
+                  <!-- 1. ยอดสินเชื่อต้องไม่ต่ำกว่า -->
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" id="chkMinLoanEnabled" ${isMinLoanChecked ? 'checked' : ''} class="w-4 h-4 accent-rose-600 rounded cursor-pointer mt-4">
+                    <div>
+                      <label for="chkMinLoanEnabled" class="block text-xs font-extrabold text-rose-700 mb-1 cursor-pointer">ยอดสินเชื่อต้องไม่ต่ำกว่า (บาท)</label>
+                      <input type="number" id="campaignMinLoanAmountInput" value="${minLoanVal}" placeholder="เช่น 580000" class="w-44 bg-rose-50/40 border-2 border-rose-200 focus:border-rose-500 focus:bg-white rounded-xl px-3 py-2 text-sm font-extrabold text-rose-800 outline-none">
+                    </div>
+                  </div>
+
+                  <!-- 2. จำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์ (แสดงเฉพาะโหมดผ่อนมาตรฐาน) -->
+                  <div id="settingCommCapBox" class="${isEasyPayChecked ? 'hidden' : 'flex'} items-center gap-2 p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200">
+                    <input type="checkbox" id="chkCommCapEnabled" ${isCommCapChecked ? 'checked' : ''} class="w-4 h-4 accent-amber-600 rounded cursor-pointer">
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold text-amber-950">
+                      <label for="chkCommCapEnabled" class="cursor-pointer">จำกัดค่าคอมเมื่อดาวน์ต่ำกว่า</label>
+                      <input type="number" id="campaignCommCapDownPctInput" value="${commCapDownVal}" placeholder="15" min="1" max="50" class="w-14 bg-white border border-amber-300 focus:border-amber-600 rounded-lg px-2 py-1 text-center font-extrabold text-amber-950 outline-none">
+                      <span>% ไม่เกิน</span>
+                      <input type="number" id="campaignCommCapMaxPctInput" value="${commCapMaxVal}" placeholder="8" min="0" max="30" class="w-14 bg-white border border-amber-300 focus:border-amber-600 rounded-lg px-2 py-1 text-center font-extrabold text-amber-950 outline-none">
+                      <span>%</span>
+                    </div>
                   </div>
                 </div>
-                <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all">
+
+                <button type="button" onclick="saveCampaign()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all shrink-0">
                   ${editingCamp ? '💾 บันทึกการแก้ไขแคมเปญ' : '💾 บันทึกแคมเปญและเรทดอกเบี้ยใหม่'}
                 </button>
               </div>
@@ -3398,6 +3412,7 @@
                                           ${cp.isEasyPay ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10px]">🎈 EASY PAY (${cp.balloonPct}%)</span>` : ''}
                                           ${cp.freeInsurance ? `<span class="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">✓ แถมประกัน</span>` : ''}
                                           ${cp.minLoanEnabled && cp.minLoanAmount > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px]">ขั้นต่ำ ${fmt(cp.minLoanAmount)}฿</span>` : ''}
+                                          ${!cp.isEasyPay && cp.commCapEnabled && cp.commCapDownPct > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">ดาวน์&lt;${cp.commCapDownPct}% คอม≤${cp.commCapMaxPct}%</span>` : ''}
                                         </div>
                                         <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
                                           <span class="text-emerald-600 font-semibold">${termRangeLabel}</span>
@@ -4030,7 +4045,94 @@
       return Math.max(priceNoAcc + accessories, 0);
     }
 
-    // ==================== MIN LOAN VALIDATION HELPER ====================
+    // ==================== TABLE-DRIVEN COMMISSION FILTERING & VALIDATION ====================
+
+    function isValidRateValue(v) {
+      return v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== '-' && !isNaN(parseFloat(v));
+    }
+
+    function getMatchedDownTierForPlan(plan, cp) {
+      if (!cp) return -1;
+      const downPctVal = num(plan.downPct);
+      if (cp.isEasyPay) {
+        if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) return 0;
+        if (downPctVal < 5) return -1;
+        for (const tier of EASY_PAY_DOWN_TIERS) {
+          if (downPctVal >= tier - 1e-9) return tier;
+        }
+        return -1;
+      }
+      if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) return 0;
+      if (downPctVal < 5) return -1;
+      for (const tier of DOWN_TIERS) {
+        if (downPctVal >= tier - 1e-9) return tier;
+      }
+      return -1;
+    }
+
+    function getAllowedCommInfoForPlan(plan) {
+      const cp = plan && plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
+      if (!cp) {
+        return { allowed: [...DEFAULT_COMM_OPTIONS], hasProgram: true, tier: 25 };
+      }
+
+      const tier = getMatchedDownTierForPlan(plan, cp);
+
+      // 1. Easy Pay: อ่านตรงจากตัวเลขจริงในแถวดาวน์นั้น (ช่องไหนเป็น "-" ซ่อนตัวเลือกคอมนั้นทันที)
+      if (cp.isEasyPay) {
+        if (tier === -1 || !cp.easyRates || !cp.easyRates[tier]) {
+          return { allowed: [], hasProgram: false, tier };
+        }
+        const rowObj = cp.easyRates[tier];
+        const allowed = [];
+        if (isValidRateValue(rowObj.col1)) allowed.push(Number(cp.easyCommCol1 ?? 8));
+        if (isValidRateValue(rowObj.col2)) allowed.push(Number(cp.easyCommCol2 ?? 16));
+        const uniqueSorted = [...new Set(allowed)].sort((a, b) => a - b);
+        return { allowed: uniqueSorted, hasProgram: uniqueSorted.length > 0, tier };
+      }
+
+      // 2. ผ่อนมาตรฐาน: ตรวจว่าแถวดาวน์นั้นมีเรทจริง + กรองตามเงื่อนไข "จำกัดค่าคอมเมื่อดาวน์ต่ำกว่าเกณฑ์"
+      let hasProgram = false;
+      if (tier !== -1 && cp.rates && cp.rates[tier]) {
+        const rRow = cp.rates[tier];
+        hasProgram = AVAILABLE_MONTHS.some(m => isValidRateValue(rRow[m]));
+      }
+
+      let opts = (Array.isArray(cp.commOptions) && cp.commOptions.length > 0)
+        ? [...cp.commOptions]
+        : parseCommOptionsList(DEFAULT_COMM_OPTIONS, cp.comPct ?? 8);
+
+      if (cp.commCapEnabled && num(cp.commCapDownPct) > 0 && num(plan.downPct) < num(cp.commCapDownPct)) {
+        const maxCap = num(cp.commCapMaxPct ?? 8);
+        opts = opts.filter(v => v <= maxCap);
+        if (opts.length === 0) opts = [maxCap];
+      }
+
+      const uniqueSorted = [...new Set(opts)].sort((a, b) => a - b);
+      return { allowed: uniqueSorted, hasProgram, tier };
+    }
+
+    function enforceAllowedCommForPlan(plan) {
+      if (!plan) return false;
+      const info = getAllowedCommInfoForPlan(plan);
+      if (info.allowed.length === 0) return false;
+
+      const cur = Number(plan.commPct);
+      if (!info.allowed.includes(cur)) {
+        const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
+        if (cp && cp.isEasyPay) {
+          plan.commPct = info.allowed[0];
+        } else {
+          // ถ้าคอมเดิมสูงกว่าเพดานที่อนุญาต ให้ลดมาเท่าค่าสูงสุดที่อนุญาต
+          const lowerOrEq = info.allowed.filter(v => v <= cur);
+          plan.commPct = lowerOrEq.length > 0 ? lowerOrEq[lowerOrEq.length - 1] : info.allowed[0];
+        }
+        return true;
+      }
+      return false;
+    }
+
+    // ==================== MIN LOAN & NO-PROGRAM VALIDATION HELPER ====================
 
     function getMinLoanWarningMessage(cp, financeAmt, netPrice) {
       if (!cp || !cp.minLoanEnabled || num(cp.minLoanAmount) <= 0) return '';
@@ -4073,63 +4175,39 @@
     function getTableRateForPlan(plan) {
       const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
       if (!cp) return 2.79;
-      const downPctVal = num(plan.downPct);
+      const matchedTier = getMatchedDownTierForPlan(plan, cp);
 
       if (cp.isEasyPay && cp.easyRates) {
-        let matchedEasyTier = 5;
-        if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) {
-          matchedEasyTier = 0;
-        } else {
-          for (const tier of EASY_PAY_DOWN_TIERS) {
-            if (downPctVal >= tier + 1e-9 || Math.abs(downPctVal - tier) <= 1e-9) {
-              matchedEasyTier = tier;
-              break;
-            }
-          }
-        }
-        const rowObj = cp.easyRates[matchedEasyTier] || cp.easyRates[5] || {};
+        if (matchedTier === -1) return 0;
+        const rowObj = cp.easyRates[matchedTier] || {};
         const selComm = Number(plan.commPct ?? cp.easyCommCol1 ?? 8);
         const col2Comm = Number(cp.easyCommCol2 ?? 16);
         const chosenVal = (selComm === col2Comm) ? rowObj.col2 : rowObj.col1;
-        const fallbackVal = (chosenVal !== null && chosenVal !== undefined && chosenVal !== '-')
-          ? chosenVal
-          : (rowObj.col1 ?? rowObj.col2);
+        const fallbackVal = isValidRateValue(chosenVal) ? chosenVal : (isValidRateValue(rowObj.col1) ? rowObj.col1 : rowObj.col2);
 
-        if (fallbackVal !== null && fallbackVal !== undefined && fallbackVal !== '-' && !isNaN(parseFloat(fallbackVal))) {
+        if (isValidRateValue(fallbackVal)) {
           return parseFloat(fallbackVal);
         }
-        return 2.59;
+        return 0;
       }
 
-      if (!cp.rates) return 2.79;
-      let matchedTier = 5;
-      if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) {
-        matchedTier = 0;
-      } else {
-        for (const tier of DOWN_TIERS) {
-          if (downPctVal >= tier + 1e-9 || Math.abs(downPctVal - tier) <= 1e-9) {
-            matchedTier = tier;
-            break;
-          }
-        }
-      }
-
-      const rTable = cp.rates[matchedTier] || cp.rates[5] || {};
+      if (!cp.rates || matchedTier === -1) return 0;
+      const rTable = cp.rates[matchedTier] || {};
       const rate = rTable[plan.term];
-      if (rate !== null && rate !== undefined && rate !== '-' && !isNaN(parseFloat(rate))) {
+      if (isValidRateValue(rate)) {
         return parseFloat(rate);
       }
 
       const availMonths = getAvailableMonthsForCampaign(plan.campaignIdx);
-      const closestMonth = availMonths.find(m => m >= plan.term) || availMonths[availMonths.length - 1];
+      const closestMonth = availMonths.find(m => m >= plan.term && isValidRateValue(rTable[m]))
+        || availMonths.slice().reverse().find(m => isValidRateValue(rTable[m]));
       const fallbackRate = closestMonth ? rTable[closestMonth] : null;
-      return (fallbackRate !== null && fallbackRate !== undefined && fallbackRate !== '-' && !isNaN(parseFloat(fallbackRate)))
-        ? parseFloat(fallbackRate)
-        : 2.79;
+      return isValidRateValue(fallbackRate) ? parseFloat(fallbackRate) : 0;
     }
 
     function getAutoRateForPlan(plan) {
       const tableRate = getTableRateForPlan(plan);
+      if (tableRate <= 0) return 0;
       const commAdj = getCommRateAdjustment(plan);
       return Number(Math.max(tableRate + commAdj, 0).toFixed(4));
     }
@@ -4366,7 +4444,7 @@
       }
     }
 
-    // ==================== HANDLERS: 4 STANDARD PLANS (+ MIN LOAN WARNING & RED RATE INPUT) ====================
+    // ==================== HANDLERS: 4 STANDARD PLANS ====================
 
     function togglePlan(planId) {
       const plan = state.plans.find(p => p.id === planId);
@@ -4396,6 +4474,7 @@
           plan.term = validMonths[0] || 48;
         }
         plan.commYears = getDefaultCommYearsForTerm(plan.term, plan.campaignIdx);
+        enforceAllowedCommForPlan(plan);
       }
       syncCurrentCarDefaultsToMargin(true);
       render();
@@ -4422,6 +4501,7 @@
           plan.term = validMonths[0] || 48;
         }
         plan.commYears = getDefaultCommYearsForTerm(plan.term, plan.campaignIdx);
+        enforceAllowedCommForPlan(plan);
         syncCurrentCarDefaultsToMargin(true);
         render();
       }
@@ -4479,6 +4559,7 @@
           plan.downAmt = amt;
           plan.downPct = net > 0 ? Number(((amt / net) * 100).toFixed(2)) : 0;
         }
+        enforceAllowedCommForPlan(plan);
         render();
       } else {
         plan.useSpecialDown = false;
@@ -4495,6 +4576,7 @@
         plan.useSpecialDown = plan.downPct < 5;
         const net = getNetPriceWithoutDown();
         plan.downAmt = Math.round(net * (plan.downPct / 100));
+        enforceAllowedCommForPlan(plan);
 
         const pctInput = document.getElementById(`plan-${planId}-downPct`);
         const amtInput = document.getElementById(`plan-${planId}-downAmt`);
@@ -4521,6 +4603,7 @@
         const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
         const specialAmt = cp && cp.specialDownLabel && !String(cp.specialDownLabel).includes('%') ? num(cp.specialDownLabel) : -1;
         plan.useSpecialDown = (plan.downAmt === specialAmt) || (plan.downPct < 5);
+        enforceAllowedCommForPlan(plan);
 
         const pctInput = document.getElementById(`plan-${planId}-downPct`);
         if (pctInput) pctInput.value = plan.downPct;
@@ -4589,6 +4672,7 @@
           const pctInput = document.getElementById(`plan-${p.id}-downPct`);
           if (pctInput && document.activeElement !== pctInput) pctInput.value = p.downPct;
         }
+        enforceAllowedCommForPlan(p);
       });
 
       updateBlackSummaryBoxDOM();
@@ -4596,11 +4680,27 @@
       state.plans.forEach(p => {
         const m = computePlanMetrics(p, netPrice);
         const cp = p.campaignIdx >= 0 ? state.campaigns[p.campaignIdx] : null;
-        const warnMsg = getMinLoanWarningMessage(cp, m.finance, netPrice);
+        const commInfo = getAllowedCommInfoForPlan(p);
+
+        const rateInput = document.getElementById(`plan-${p.id}-rateInput`);
+        if (rateInput && p.customRate === '' && document.activeElement !== rateInput) {
+          rateInput.value = m.rPct.toFixed(2);
+        }
+        const rateHint = document.getElementById(`plan-${p.id}-rateHint`);
+        if (rateHint) {
+          const commDiff = getCommRateAdjustment(p);
+          const baseRate = getBaseRateBeforeBeginning(p);
+          rateHint.innerText = `(คอม ${p.commPct ?? 8}% ${commDiff !== 0 ? `[${commDiff > 0 ? '+' : ''}${commDiff.toFixed(2)}%] ` : ''}${p.isBeginning ? `• หัก Beginning -0.10% จาก ${baseRate.toFixed(2)}% เหลือ ${m.rPct.toFixed(2)}%` : '• อัตโนมัติตามตาราง/แก้ได้'})`;
+        }
+
+        const noProgMsg = (cp && netPrice > 0 && !commInfo.hasProgram)
+          ? `ดาวน์ ${p.downPct}% ไม่มีโปรแกรมในแคมเปญนี้`
+          : '';
+        const minLoanMsg = getMinLoanWarningMessage(cp, m.finance, netPrice);
+        const warnMsg = noProgMsg || minLoanMsg;
 
         const warnBox = document.getElementById(`plan-${p.id}-minLoanWarn`);
         const warnText = document.getElementById(`plan-${p.id}-minLoanWarnText`);
-        const rateInput = document.getElementById(`plan-${p.id}-rateInput`);
         if (warnBox && warnText) {
           if (warnMsg) {
             warnText.innerText = warnMsg;
@@ -4651,7 +4751,7 @@
       });
     }
 
-    // ==================== HANDLERS & FORMULA: BALLOON (+ MIN LOAN WARNING) ====================
+    // ==================== HANDLERS & FORMULA: BALLOON (TABLE-DRIVEN COMM FILTERING) ====================
 
     function selectBalloonFinanceCompany(financeName) {
       const bp = state.balloonPlan;
@@ -4678,6 +4778,7 @@
         state.balloonPlan.balloonPct = num(cp.balloonPct) || 30;
       }
       state.balloonPlan.commYears = getDefaultCommYearsForTerm(60, state.balloonPlan.campaignIdx);
+      enforceAllowedCommForPlan(state.balloonPlan);
       syncCurrentCarDefaultsToMargin(true);
       render();
     }
@@ -4702,6 +4803,7 @@
           bp.downAmt = amt;
           bp.downPct = net > 0 ? Number(((amt / net) * 100).toFixed(2)) : 0;
         }
+        enforceAllowedCommForPlan(bp);
         render();
       } else {
         bp.useSpecialDown = false;
@@ -4717,6 +4819,7 @@
       bp.useSpecialDown = bp.downPct < 5;
       const net = getNetPriceWithoutDown();
       bp.downAmt = Math.round(net * (bp.downPct / 100));
+      enforceAllowedCommForPlan(bp);
 
       const pctInput = document.getElementById('balloon-downPct');
       const amtInput = document.getElementById('balloon-downAmt');
@@ -4740,6 +4843,7 @@
       const cp = bp.campaignIdx >= 0 ? state.campaigns[bp.campaignIdx] : null;
       const specialAmt = cp && cp.specialDownLabel && !String(cp.specialDownLabel).includes('%') ? num(cp.specialDownLabel) : -1;
       bp.useSpecialDown = (bp.downAmt === specialAmt) || (bp.downPct < 5);
+      enforceAllowedCommForPlan(bp);
 
       const pctInput = document.getElementById('balloon-downPct');
       if (pctInput) pctInput.value = bp.downPct;
@@ -4779,6 +4883,9 @@
         if (pctInput && document.activeElement !== pctInput) pctInput.value = bp.downPct;
       }
 
+      // บังคับใช้เฉพาะค่าคอมที่มีตัวเลขจริงในตาราง Easy Pay ของขั้นดาวน์นั้น
+      enforceAllowedCommForPlan(bp);
+
       const n = 60;
       const autoRate = getAutoRateForPlan(bp);
       const rPct = bp.customRate !== '' ? num(bp.customRate) : autoRate;
@@ -4798,7 +4905,8 @@
 
       const isInvalid = financeMain > 0 && (rawMonthlyMain <= 0 || balloonAmt >= financeMain);
 
-      const commPctVal = (bp.commPct !== undefined ? num(bp.commPct) : 8) / 100;
+      const commInfo = getAllowedCommInfoForPlan(bp);
+      const commPctVal = (commInfo.hasProgram && bp.commPct !== undefined ? num(bp.commPct) : 0) / 100;
       const totalInterestBalloon = Math.max((rawMonthlyMain * n + balloonAmt) - financeMain, 0);
       const commAmt = (!isInvalid && financeMain > 0 && commPctVal > 0)
         ? Math.ceil((totalInterestBalloon * commPctVal) / 1.07)
@@ -4821,18 +4929,33 @@
         financeNoAcc,
         monthlyNoAcc,
         commAmt,
-        isInvalid
+        isInvalid,
+        hasProgram: commInfo.hasProgram
       };
     }
 
     function calculateBalloon() {
       const b = computeBalloonDetails();
-      const cp = state.balloonPlan.campaignIdx >= 0 ? state.campaigns[state.balloonPlan.campaignIdx] : null;
-      const warnMsg = getMinLoanWarningMessage(cp, b.financeMain, b.priceWithAcc);
+      const bp = state.balloonPlan;
+      const cp = bp.campaignIdx >= 0 ? state.campaigns[bp.campaignIdx] : null;
+
+      const rateInput = document.getElementById('balloon-rateInput');
+      if (rateInput && bp.customRate === '' && document.activeElement !== rateInput) {
+        rateInput.value = b.rPct.toFixed(2);
+      }
+      const rateHint = document.getElementById('balloon-rateHint');
+      if (rateHint) {
+        rateHint.innerText = `(คอม ${bp.commPct ?? 8}% • ดึงตรงจากคอลัมน์คอมในตาราง Easy Pay)`;
+      }
+
+      const noProgMsg = (cp && b.priceWithAcc > 0 && !b.hasProgram)
+        ? `ดาวน์ ${bp.downPct}% ไม่มีโปรแกรมในแคมเปญนี้`
+        : '';
+      const minLoanMsg = getMinLoanWarningMessage(cp, b.financeMain, b.priceWithAcc);
+      const warnMsg = noProgMsg || minLoanMsg;
 
       const warnBox = document.getElementById('balloon-minLoanWarn');
       const warnText = document.getElementById('balloon-minLoanWarnText');
-      const rateInput = document.getElementById('balloon-rateInput');
       if (warnBox && warnText) {
         if (warnMsg) {
           warnText.innerText = warnMsg;
@@ -4920,7 +5043,7 @@
       if (document.getElementById('cashResNetTotal')) document.getElementById('cashResNetTotal').innerText = fmt(netTotal) + ' ฿';
     }
 
-    // ==================== PRICE LIST (ทำใบราคา — หลายรุ่น + Flex Layout ไม่ใช้ rowspan + โลโก้แบรนด์จริง) ====================
+    // ==================== PRICE LIST (อัตโนมัติ GENRATE คอม 8% + EASY PAY คอม 8%) ====================
 
     function togglePriceListModel(modelName) {
       const formatted = formatEPower(modelName);
@@ -4935,7 +5058,6 @@
       }
       state.priceList.selectedModels = currentList;
 
-      // เมื่อเลือกมากกว่า 1 รุ่น ให้ล็อกเป็นโหมดอัตโนมัติตามรุ่นรถทันที
       if (state.priceList.selectedModels.length > 1) {
         state.priceList.campaignIdx = -1;
         if (state.priceList.easyPayMode !== 'none' && state.priceList.easyPayMode !== 'auto') {
@@ -5035,7 +5157,6 @@
       const pl = state.priceList;
 
       if (isEasyPay) {
-        // หากผู้ใช้เลือก "ไม่แสดงคอลัมน์ Easy Pay" ต้องคืนค่า null เสมอ
         if (pl.easyPayMode === 'none' || !pl.easyPayMode) return null;
 
         if (pl.easyPayMode !== 'auto' && totalSelectedModelsCount <= 1) {
@@ -5044,16 +5165,67 @@
             return state.campaigns[idx];
           }
         }
+        // โหมดอัตโนมัติ: เลือกแคมเปญ Easy Pay ของรุ่นนั้น โดยให้ความสำคัญกับ Easy Pay ปกติ (ไม่แถมประกัน) และมีคอลัมน์คอม 8% ก่อน
         const pool = getFilteredCampaignsForPlan(pl.financeText, 'balloon', modelName);
-        return pool.length > 0 ? pool[0].cp : null;
+        if (pool.length === 0) return null;
+        const exactEasy8 = pool.find(({ cp }) => !cp.freeInsurance && (Number(cp.easyCommCol1) === 8 || Number(cp.easyCommCol2) === 8));
+        if (exactEasy8) return exactEasy8.cp;
+        const anyEasy8 = pool.find(({ cp }) => Number(cp.easyCommCol1) === 8 || Number(cp.easyCommCol2) === 8);
+        if (anyEasy8) return anyEasy8.cp;
+        const nonFree = pool.find(({ cp }) => !cp.freeInsurance);
+        return (nonFree || pool[0]).cp;
       }
 
       // โหมดแคมเปญปกติ (48-96 เดือน)
       if (totalSelectedModelsCount <= 1 && pl.campaignIdx >= 0 && state.campaigns[pl.campaignIdx] && !state.campaigns[pl.campaignIdx].isEasyPay) {
         return state.campaigns[pl.campaignIdx];
       }
+
+      // โหมดอัตโนมัติตามรุ่นรถ: ดึงตาราง GENRATE คอม 8% ของรุ่นนั้นก่อนเสมอ
       const pool = getFilteredCampaignsForPlan(pl.financeText, 'standard', modelName);
-      return pool.length > 0 ? pool[0].cp : null;
+      if (pool.length === 0) return null;
+
+      const isGenrate = cp => String(cp.campaignName || '').toUpperCase().includes('GENRATE');
+      const exactGenrate = pool.find(({ cp }) => String(cp.campaignName || '').trim().toUpperCase() === 'GENRATE' && !cp.freeInsurance);
+      if (exactGenrate) return exactGenrate.cp;
+      const genrateNonFree = pool.find(({ cp }) => isGenrate(cp) && !cp.freeInsurance);
+      if (genrateNonFree) return genrateNonFree.cp;
+      const anyGenrate = pool.find(({ cp }) => isGenrate(cp));
+      if (anyGenrate) return anyGenrate.cp;
+      return pool[0].cp;
+    }
+
+    function getPriceListStandardRateAt8Pct(cp, tier, month) {
+      if (!cp || !cp.rates || !cp.rates[tier]) return NaN;
+      const raw = cp.rates[tier][month];
+      if (!isValidRateValue(raw)) return NaN;
+      let rateVal = parseFloat(raw);
+      // ปรับเรทดอกเบี้ยให้เป็นฐานคอม 8% อัตโนมัติ (หากตารางไม่ได้ตั้ง ComPct = 8)
+      const baseComm = cp.comPct !== undefined ? Number(cp.comPct) : 8;
+      if (baseComm !== 8) {
+        const opts = (Array.isArray(cp.commOptions) && cp.commOptions.length > 0)
+          ? cp.commOptions
+          : parseCommOptionsList(DEFAULT_COMM_OPTIONS, baseComm);
+        const combined = [...new Set([...opts, baseComm, 8])].sort((a, b) => a - b);
+        const baseIdx = combined.indexOf(baseComm);
+        const idx8 = combined.indexOf(8);
+        if (baseIdx !== -1 && idx8 !== -1) {
+          rateVal = Math.max(Number((rateVal + (idx8 - baseIdx) * 0.10).toFixed(4)), 0);
+        }
+      }
+      return rateVal;
+    }
+
+    function getPriceListEasyPayRateAt8Pct(cp, tier) {
+      if (!cp || !cp.easyRates || !cp.easyRates[tier]) return NaN;
+      const rowObj = cp.easyRates[tier];
+      const c1 = Number(cp.easyCommCol1 ?? 8);
+      const c2 = Number(cp.easyCommCol2 ?? 16);
+      let chosen = null;
+      if (c1 === 8) chosen = rowObj.col1;
+      else if (c2 === 8) chosen = rowObj.col2;
+      else chosen = rowObj.col1;
+      return isValidRateValue(chosen) ? parseFloat(chosen) : NaN;
     }
 
     function buildPriceListHtml(resolvedLogoSrc = '') {
@@ -5065,7 +5237,6 @@
         .map(id => brandCars.find(c => String(c.id) === String(id)))
         .filter(Boolean);
 
-      // จัดกลุ่มรถที่เลือกตาม Model
       const grouped = [];
       const groupMap = new Map();
       selectedCars.forEach(car => {
@@ -5091,7 +5262,7 @@
         if (stdCp) {
           if (stdCp.campaignName) campaignNamesSet.add(stdCp.campaignName);
           const allTiers = [...DOWN_TIERS, 0];
-          if (allTiers.some(d => stdCp.rates?.[d]?.[96] !== null && stdCp.rates?.[d]?.[96] !== undefined && stdCp.rates?.[d]?.[96] !== '-')) {
+          if (allTiers.some(d => isValidRateValue(stdCp.rates?.[d]?.[96]))) {
             has96 = true;
           }
         }
@@ -5108,7 +5279,6 @@
       const rowPadY = compactMode ? 'padding: 3px 4px;' : 'padding: 5px 4px;';
       const fontSizeStyle = compactMode ? 'font-size: 10px;' : 'font-size: 11px;';
 
-      // ความกว้างคอลัมน์คงที่ (ใช้ Flex แทน rowspan เพื่อให้ html2canvas เรนเดอร์คมชัด 100%)
       const colGradeW = '138px';
       const colPriceW = '82px';
       const colPctW = '54px';
@@ -5159,8 +5329,7 @@
             const finance = Math.max(price - downAmt, 0);
 
             const termCells = terms.map(m => {
-              const rateRaw = stdCp?.rates?.[dr.tier]?.[m];
-              const rateVal = (rateRaw !== null && rateRaw !== undefined && rateRaw !== '-' && rateRaw !== '') ? parseFloat(rateRaw) : NaN;
+              const rateVal = getPriceListStandardRateAt8Pct(stdCp, dr.tier, m);
               if (isNaN(rateVal) || finance <= 0) {
                 return `<div style="flex: 1; text-align: center; color: #94a3b8; ${rowPadY}">—</div>`;
               }
@@ -5173,18 +5342,14 @@
             let easyCell = '';
             if (showEasyPayCol) {
               let easyValStr = '—';
-              if (easyCp && easyCp.easyRates) {
-                const easyRow = easyCp.easyRates[dr.tier];
-                const rawEasyRate = easyRow ? (easyRow.col1 ?? easyRow.col2) : null;
-                const easyRate = (rawEasyRate !== null && rawEasyRate !== undefined && rawEasyRate !== '-' && rawEasyRate !== '') ? parseFloat(rawEasyRate) : NaN;
-                if (!isNaN(easyRate) && finance > 0) {
-                  const balloonPct = num(easyCp.balloonPct) || 30;
-                  const balloonAmt = Math.round(price * (balloonPct / 100));
-                  const rDec = easyRate / 100;
-                  const rawBalMonthly = (((60 + 1) / 12) * finance * rDec + (finance - balloonAmt)) / 60;
-                  if (rawBalMonthly > 0 && balloonAmt < finance) {
-                    easyValStr = fmt(Math.ceil(rawBalMonthly));
-                  }
+              const easyRate = getPriceListEasyPayRateAt8Pct(easyCp, dr.tier);
+              if (!isNaN(easyRate) && finance > 0) {
+                const balloonPct = num(easyCp.balloonPct) || 30;
+                const balloonAmt = Math.round(price * (balloonPct / 100));
+                const rDec = easyRate / 100;
+                const rawBalMonthly = (((60 + 1) / 12) * finance * rDec + (finance - balloonAmt)) / 60;
+                if (rawBalMonthly > 0 && balloonAmt < finance) {
+                  easyValStr = fmt(Math.ceil(rawBalMonthly));
                 }
               }
               easyCell = `<div style="width: ${colEasyW}; flex-shrink: 0; text-align: center; font-weight: 800; color: ${easyValStr === '—' ? '#cbd5e1' : '#0f172a'}; background-color: #fef9e7; border-left: 1px solid #fde68a; ${rowPadY}">${easyValStr}</div>`;
@@ -5234,7 +5399,6 @@
 
       return `
         <div class="bg-white text-slate-900 font-sans">
-          <!-- หัวกระดาษแบบแถบมืดหรูหรา + โลโก้แบรนด์รถยนต์จริง + ข้อมูลผู้ขาย + QR Code LINE -->
           <div class="rounded-2xl px-4 py-3 mb-2.5 flex items-center justify-between gap-3 text-white shadow-sm" style="background: linear-gradient(115deg, #0b1120 0%, #16182c 62%, #3a0d1d 100%);">
             <div class="flex items-center gap-3">
               <div class="w-14 h-12 rounded-xl bg-white p-1.5 flex items-center justify-center shadow-sm shrink-0">
@@ -5263,20 +5427,16 @@
             ค่างวดต่อเดือน (บาท) · ตัวเลขหัวตาราง = จำนวนงวด (เดือน)
           </div>
 
-          <!-- ตารางใบราคาแบบ Flex (ไม่ใช้ rowspan เพื่อความคมชัด 100% ทั้ง PNG/JPG และ PDF) -->
           <div style="border-radius: 14px; overflow: hidden; border: 1px solid #cbd5e1; background-color: #ffffff;">
-            <!-- Header -->
             <div style="display: flex; align-items: stretch; background-color: #0f172a; color: #ffffff; font-weight: 700; font-size: 10.5px;">
               <div style="width: ${colGradeW}; flex-shrink: 0; padding: 8px 10px; border-right: 1px solid #334155; display: flex; align-items: center;">แบบ/รุ่น</div>
               <div style="width: ${colPriceW}; flex-shrink: 0; padding: 8px 6px; border-right: 1px solid #334155; display: flex; align-items: center; justify-content: center;">ราคาขาย</div>
               <div style="flex: 1; display: flex; flex-direction: column;">
-                <!-- แถวบนของหัวตาราง -->
                 <div style="display: flex; border-bottom: 1px solid #334155;">
                   <div style="width: calc(${colPctW} + ${colDownW}); flex-shrink: 0; padding: 5px 4px; text-align: center; border-right: 1px solid #334155;">ดาวน์</div>
                   <div style="flex: 1; padding: 5px 4px; text-align: center; ${showEasyPayCol ? 'border-right: 1px solid #334155;' : ''}">${mainCampaignHeader}</div>
                   ${showEasyPayCol ? `<div style="width: ${colEasyW}; flex-shrink: 0; padding: 5px 4px; text-align: center; font-weight: 800; background-color: #b48a2c; color: #ffffff; font-size: 9.5px;">${brandObj.name} EASY PAY</div>` : ''}
                 </div>
-                <!-- แถวล่างของหัวตาราง -->
                 <div style="display: flex; background-color: #1e293b; color: #e2e8f0; font-size: 10px;">
                   <div style="width: ${colPctW}; flex-shrink: 0; padding: 4px; text-align: center;">%</div>
                   <div style="width: ${colDownW}; flex-shrink: 0; padding: 4px 8px 4px 4px; text-align: right; border-right: 1px solid #334155;">ดาวน์</div>
@@ -5286,11 +5446,9 @@
               </div>
             </div>
 
-            <!-- Body -->
             ${groupsHtml}
           </div>
 
-          <!-- ท้ายกระดาษ -->
           <div class="flex justify-between items-center text-[9px] text-slate-400 mt-3 pt-2 border-t border-slate-200 px-1">
             <span>ราคาและเงื่อนไขอาจเปลี่ยนแปลงโดยไม่ต้องแจ้งล่วงหน้า</span>
             <span>"—" = ไม่มีโปรแกรมในเงื่อนไขนี้</span>
@@ -5376,7 +5534,7 @@
       }
     }
 
-    // ==================== MARGIN & COMMISSION POPUP ENGINE (ฝั่งเซลล์ + Drop-down สลับ MG & ค่าประกัน) ====================
+    // ==================== MARGIN & COMMISSION POPUP ENGINE (กรอง % คอมตามตารางจริงอัตโนมัติ) ====================
 
     function getCheckedAccessoriesTotal() {
       const modelAcc = getAccessoriesForCurrentModel();
@@ -5644,18 +5802,17 @@
       let activePlanObj = state.plans.find(p => p.id == state.margin.selectedPlanId) || state.plans[0];
       if (state.step === 'balloon') activePlanObj = state.balloonPlan;
 
-      const cp = activePlanObj.campaignIdx >= 0 ? state.campaigns[activePlanObj.campaignIdx] : null;
-      let commOptions = DEFAULT_COMM_OPTIONS;
-      if (cp && cp.isEasyPay) {
-        commOptions = [...new Set([Number(cp.easyCommCol1 ?? 8), Number(cp.easyCommCol2 ?? 16)])].sort((a, b) => a - b);
-      } else if (cp && Array.isArray(cp.commOptions) && cp.commOptions.length > 0) {
-        commOptions = cp.commOptions;
+      enforceAllowedCommForPlan(activePlanObj);
+      const commInfo = getAllowedCommInfoForPlan(activePlanObj);
+
+      if (commInfo.allowed.length === 0) {
+        pctSel.innerHTML = `<option value="0" selected>ไม่มีโปรแกรม (0%)</option>`;
+        pctSel.disabled = true;
+      } else {
+        pctSel.disabled = false;
+        const curPct = Number(activePlanObj.commPct);
+        pctSel.innerHTML = commInfo.allowed.map(pct => `<option value="${pct}" ${pct === curPct ? 'selected' : ''}>${pct}%</option>`).join('');
       }
-
-      const curPct = activePlanObj.commPct !== undefined ? Number(activePlanObj.commPct) : (cp?.comPct ?? 8);
-      const displayOptions = commOptions.includes(curPct) ? commOptions : [...commOptions, curPct].sort((a, b) => a - b);
-
-      pctSel.innerHTML = displayOptions.map(pct => `<option value="${pct}" ${pct == curPct ? 'selected' : ''}>${pct}%</option>`).join('');
 
       const maxCapYears = getMaxCommYearsForCampaign(activePlanObj.campaignIdx);
       const curYrs = activePlanObj.commYears !== undefined
@@ -5715,6 +5872,7 @@
         const plan = state.plans.find(p => p.id == state.margin.selectedPlanId) || state.plans[0];
         plan.commPct = newPct;
         plan.customRate = '';
+        enforceAllowedCommForPlan(plan);
         const effRate = getEffectiveRateAfterBeginning(plan);
         const rateInput = document.getElementById(`plan-${plan.id}-rateInput`);
         if (rateInput) rateInput.value = effRate.toFixed(2);
@@ -5728,6 +5886,7 @@
       } else if (state.step === 'balloon') {
         state.balloonPlan.commPct = newPct;
         state.balloonPlan.customRate = '';
+        enforceAllowedCommForPlan(state.balloonPlan);
         const autoRate = getAutoRateForPlan(state.balloonPlan);
         const rateInput = document.getElementById('balloon-rateInput');
         if (rateInput) rateInput.value = autoRate.toFixed(2);
@@ -5854,7 +6013,9 @@
         planLabel = 'แผนบอลลูน';
         subsidyAmt = 0;
         commAmt = b.commAmt;
-        rateHintText = `💡 แผนบอลลูน (60 เดือน): คอม ${state.balloonPlan.commPct}% → ดอกเบี้ยจากตาราง ${b.rPct.toFixed(2)}% | ยอดจัด ${fmt(b.financeMain)} ฿`;
+        rateHintText = b.hasProgram
+          ? `💡 แผนบอลลูน (60 เดือน): คอม ${state.balloonPlan.commPct}% → ดอกเบี้ยจากตาราง ${b.rPct.toFixed(2)}% | ยอดจัด ${fmt(b.financeMain)} ฿`
+          : `⚠️ ดาวน์ ${state.balloonPlan.downPct}% ไม่มีโปรแกรมในแคมเปญ Easy Pay นี้`;
       } else {
         planLabel = 'ซื้อสด';
         subsidyAmt = 0;
@@ -7445,17 +7606,22 @@
       const box = document.getElementById('settingEasyPayBalloonBox');
       const stdWrap = document.getElementById('standardMatrixWrapper');
       const easyWrap = document.getElementById('easyPayMatrixWrapper');
+      const commCapBox = document.getElementById('settingCommCapBox');
       if (checked) {
         box?.classList.remove('hidden');
         box?.classList.add('flex');
         stdWrap?.classList.add('hidden');
         easyWrap?.classList.remove('hidden');
+        commCapBox?.classList.add('hidden');
+        commCapBox?.classList.remove('flex');
         syncEasyPayCommHeaders();
       } else {
         box?.classList.add('hidden');
         box?.classList.remove('flex');
         stdWrap?.classList.remove('hidden');
         easyWrap?.classList.add('hidden');
+        commCapBox?.classList.remove('hidden');
+        commCapBox?.classList.add('flex');
       }
     }
 
@@ -7533,6 +7699,9 @@
       const minLoanEnabled = document.getElementById('chkMinLoanEnabled')?.checked || false;
       const minLoanAmount = num(document.getElementById('campaignMinLoanAmountInput')?.value || 0);
       const isEasyPay = document.getElementById('chkEasyPayCampaign')?.checked || false;
+      const commCapEnabled = !isEasyPay && (document.getElementById('chkCommCapEnabled')?.checked || false);
+      const commCapDownPct = num(document.getElementById('campaignCommCapDownPctInput')?.value || 0);
+      const commCapMaxPct = num(document.getElementById('campaignCommCapMaxPctInput')?.value ?? 8);
       const balloonPct = num(document.getElementById('campaignBalloonPctInput')?.value ?? 30) || 30;
       const comPct = num(document.getElementById('campaignComPctInput')?.value ?? 8);
       const comMaxYears = Math.min(Math.max(num(document.getElementById('campaignComMaxYearsInput')?.value ?? 5), 1), 8);
@@ -7583,6 +7752,9 @@
         freeInsurance,
         minLoanEnabled,
         minLoanAmount,
+        commCapEnabled,
+        commCapDownPct,
+        commCapMaxPct,
         isEasyPay,
         balloonPct,
         comPct: isEasyPay ? easyCommCol1 : comPct,
@@ -7865,6 +8037,9 @@
                 FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
                 MinLoanEnabled: cp.minLoanEnabled ? 'TRUE' : 'FALSE',
                 MinLoanAmount: num(cp.minLoanAmount || 0),
+                CommCapEnabled: 'FALSE',
+                CommCapDownPct: 0,
+                CommCapMaxPct: 8,
                 IsEasyPay: 'TRUE',
                 BalloonPct: cp.balloonPct ?? 30,
                 ComPct: cp.easyCommCol1 ?? 8,
@@ -7888,6 +8063,9 @@
                 FreeInsurance: cp.freeInsurance ? 'TRUE' : 'FALSE',
                 MinLoanEnabled: cp.minLoanEnabled ? 'TRUE' : 'FALSE',
                 MinLoanAmount: num(cp.minLoanAmount || 0),
+                CommCapEnabled: cp.commCapEnabled ? 'TRUE' : 'FALSE',
+                CommCapDownPct: num(cp.commCapDownPct || 0),
+                CommCapMaxPct: num(cp.commCapMaxPct ?? 8),
                 IsEasyPay: 'FALSE',
                 BalloonPct: 30,
                 ComPct: cp.comPct ?? 8,
@@ -7907,8 +8085,9 @@
         });
         if (rows.length === 0) {
           rows.push({
-            Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'STANDARD', CarModel: 'EXAMPLE',
+            Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'GENRATE', CarModel: 'EXAMPLE',
             MG_Type: 'normal', FreeInsurance: 'FALSE', MinLoanEnabled: 'FALSE', MinLoanAmount: 0,
+            CommCapEnabled: 'FALSE', CommCapDownPct: 0, CommCapMaxPct: 8,
             IsEasyPay: 'FALSE', BalloonPct: 30, ComPct: 8, ComMaxYears: 5,
             CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%',
             M24: 1.99, M36: 2.09, M48: 2.19, M60: 2.39, M72: 2.59, M84: 2.89, M96: '-'
@@ -8032,6 +8211,9 @@
             const freeInsurance = String(r.FreeInsurance || 'FALSE').toUpperCase() === 'TRUE';
             const minLoanEnabled = String(r.MinLoanEnabled || 'FALSE').toUpperCase() === 'TRUE';
             const minLoanAmount = num(r.MinLoanAmount || 0);
+            const commCapEnabled = !isEasyPay && String(r.CommCapEnabled || 'FALSE').toUpperCase() === 'TRUE';
+            const commCapDownPct = num(r.CommCapDownPct || 0);
+            const commCapMaxPct = r.CommCapMaxPct !== undefined ? num(r.CommCapMaxPct) : 8;
             if (!finance) return;
 
             const key = `${getFinanceFolderKey(finance)}||${campaignName}||${getModelFolderKey(carModel)}||${isEasyPay ? '1' : '0'}`;
@@ -8048,6 +8230,9 @@
                 freeInsurance,
                 minLoanEnabled,
                 minLoanAmount,
+                commCapEnabled,
+                commCapDownPct,
+                commCapMaxPct,
                 isEasyPay,
                 balloonPct: num(r.BalloonPct ?? 30) || 30,
                 comPct: num(r.ComPct ?? 8),
@@ -8215,7 +8400,7 @@
           </form>
         </div>
 
-        <!-- 2. รายชื่อผู้ใช้งานทั้งหมด (พร้อมปุ่ม แก้ไข, สำรองข้อมูล, คัดลอก, ลบ) -->
+        <!-- 2. รายชื่อผู้ใช้งานทั้งหมด -->
         <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
           <div class="flex flex-wrap justify-between items-center gap-2">
             <h4 class="font-bold text-slate-900 text-sm">👥 รายชื่อผู้ใช้งานทั้งหมด (${users.length} บัญชี)</h4>
@@ -8420,6 +8605,7 @@
         const campRows = (data.campaigns || []).map(cp => ({
           Brand: cp.brand, Finance: cp.finance, CampaignName: cp.campaignName, CarModel: cp.carModel,
           MG_Type: cp.mgType, FreeInsurance: cp.freeInsurance, MinLoanEnabled: cp.minLoanEnabled, MinLoanAmount: cp.minLoanAmount,
+          CommCapEnabled: cp.commCapEnabled, CommCapDownPct: cp.commCapDownPct, CommCapMaxPct: cp.commCapMaxPct,
           IsEasyPay: cp.isEasyPay, BalloonPct: cp.balloonPct, ComPct: cp.comPct, ComMaxYears: cp.comMaxYears,
           RatesJSON: JSON.stringify(cp.isEasyPay ? cp.easyRates : cp.rates)
         }));
