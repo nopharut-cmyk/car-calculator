@@ -969,6 +969,9 @@
       state.accessories = 0;
       state.driveOffInputText = '';
       state.loadedQuotationId = null;
+      state.editingCarId = null;
+      state.editingCampaignIndex = null;
+      state.editingAccessoryId = null;
       state.plans = createDefaultPlans();
       state.balloonPlan = createDefaultBalloonPlan();
       state.margin = createDefaultMarginState();
@@ -1051,7 +1054,7 @@
       }
     }
 
-    // ==================== NORMALIZATION & MODE-SEPARATED CAMPAIGN FILTERS ====================
+    // ==================== NORMALIZATION & MULTI-BRAND CAMPAIGN FILTERS ====================
 
     function normalizeCar(car) {
       if (!car) return car;
@@ -1117,9 +1120,6 @@
       cp.freeInsurance = Boolean(cp.freeInsurance);
       cp.minLoanEnabled = Boolean(cp.minLoanEnabled);
       cp.minLoanAmount = num(cp.minLoanAmount || 0);
-      cp.commCapEnabled = Boolean(cp.commCapEnabled);
-      cp.commCapDownPct = num(cp.commCapDownPct || 0);
-      cp.commCapMaxPct = cp.commCapMaxPct !== undefined ? num(cp.commCapMaxPct) : 8;
       if (cp.balloonPct === undefined) cp.balloonPct = 30;
       if (cp.mgType === undefined) cp.mgType = 'normal';
       if (cp.comPct === undefined) cp.comPct = cp.baseCommPct !== undefined ? num(cp.baseCommPct) : 8;
@@ -1206,6 +1206,7 @@
       return [...seen.values()];
     }
 
+    // จัดลำดับการจับคู่รุ่นรถ: 1) ชื่อรุ่นตรงเป๊ะ (Exact Match) → 2) ชื่อรุ่นใกล้เคียง (Partial Match) → 3) แคมเปญรวมทุกรุ่น
     function getFilteredCampaignsForPlan(financeText, mode = 'standard', modelOverride = null) {
       const targetFinKey = getFinanceFolderKey(financeText);
       const targetModel = modelOverride !== null ? modelOverride : state.selectedModel;
@@ -1219,11 +1220,18 @@
       const basePool = byFinance.length > 0 ? byFinance : indexed;
 
       if (targetModel && modelKey !== 'UNSPECIFIED_MODEL') {
-        const byModel = basePool.filter(item => {
+        const exactMatch = basePool.filter(item => getModelFolderKey(item.cp.carModel) === modelKey);
+        const genericMatch = basePool.filter(item => getModelFolderKey(item.cp.carModel) === 'UNSPECIFIED_MODEL');
+        if (exactMatch.length > 0) {
+          return [...exactMatch, ...genericMatch];
+        }
+        const partialMatch = basePool.filter(item => {
           const mKey = getModelFolderKey(item.cp.carModel);
-          return mKey === 'UNSPECIFIED_MODEL' || mKey.includes(modelKey) || modelKey.includes(mKey);
+          return mKey !== 'UNSPECIFIED_MODEL' && (mKey.includes(modelKey) || modelKey.includes(mKey));
         });
-        if (byModel.length > 0) return byModel;
+        if (partialMatch.length > 0 || genericMatch.length > 0) {
+          return [...partialMatch, ...genericMatch];
+        }
       }
       return basePool;
     }
@@ -1900,6 +1908,11 @@
       state.margin.insManual = false;
       state.margin.mgManual = false;
 
+      // รีเซ็ตสถานะฟอร์มแก้ไขค้างทุกครั้งที่สลับหน้า/เปลี่ยนแบรนด์
+      state.editingCarId = null;
+      state.editingCampaignIndex = null;
+      state.editingAccessoryId = null;
+
       if (newStep === 'settings') {
         state.expandedFinanceFolders = {};
         state.expandedCampaignSubFolders = {};
@@ -1910,11 +1923,8 @@
         const brandObj = BRANDS.find(b => b.id === state.selectedBrand);
         if (brandObj) ensureBrandLogoDataUrl(brandObj);
       } else if (newStep === 'balloon') {
-        const modelKey = getModelFolderKey(state.selectedModel);
-        const easyPool = getCampaignsMatchingBrandAndMode('balloon');
-        const matchedEasy = easyPool.find(({ cp }) =>
-          !state.selectedModel || modelKey === 'UNSPECIFIED_MODEL' || getModelFolderKey(cp.carModel).includes(modelKey) || modelKey.includes(getModelFolderKey(cp.carModel))
-        ) || easyPool[0] || null;
+        const matchedPool = getFilteredCampaignsForPlan('', 'balloon', state.selectedModel);
+        const matchedEasy = matchedPool[0] || null;
 
         if (matchedEasy) {
           const eCp = matchedEasy.cp;
@@ -2688,12 +2698,13 @@
       `;
     }
 
-    // ==================== 4. หน้าทำใบราคา (Price List Builder — อัตโนมัติ GENRATE คอม 8% + Easy Pay คอม 8%) ====================
+    // ==================== 4. หน้าทำใบราคา (Price List Builder — รองรับทุกแบรนด์อัตโนมัติ) ====================
 
     function renderPriceListPage() {
       const brandObj = BRANDS.find(b => b.id === state.selectedBrand) || { id: 'car', name: 'CAR' };
       const brandCars = state.cars.filter(c => c.brand === state.selectedBrand);
       const pl = state.priceList;
+      const autoStdLabel = state.selectedBrand === 'nissan' ? 'GENRATE คอม 8%' : 'แคมเปญมาตรฐาน คอม 8%';
 
       const uniqueModels = [];
       const modelMap = new Map();
@@ -2733,7 +2744,7 @@
               <div class="text-[11px] font-bold tracking-widest uppercase text-slate-400">PRICE LIST • ${brandObj.name}</div>
               <h2 class="text-xl sm:text-2xl font-extrabold mt-1">ทำใบราคา</h2>
               <p class="text-xs sm:text-sm text-slate-300 mt-1">
-                เลือกรถได้หลายรุ่นและแบบ/รุ่นย่อยได้หลายรายการ โหมดอัตโนมัติจะดึงตาราง GENRATE คอม 8% และ Easy Pay คอม 8% ของแต่ละรุ่นมาคำนวณให้ทันที
+                เลือกรถได้หลายรุ่นและแบบ/รุ่นย่อยได้หลายรายการ โหมดอัตโนมัติจะดึงตาราง ${autoStdLabel} และ Easy Pay คอม 8% ของแต่ละรุ่นมาคำนวณให้ทันที
               </p>
             </div>
 
@@ -2756,11 +2767,11 @@
                   <label class="block font-medium text-slate-500 mb-1">แคมเปญดอกเบี้ย (ผ่อน 48–96 เดือน)</label>
                   ${isMultiModel ? `
                     <div class="w-full bg-blue-50 border border-blue-200 rounded-xl p-2.5 font-extrabold text-blue-800 flex items-center gap-1.5">
-                      <span>✨</span> อัตโนมัติตามรุ่นรถ: GENRATE คอม 8% (${activeModelsList.length} รุ่น)
+                      <span>✨</span> อัตโนมัติตามรุ่นรถ: ${autoStdLabel} (${activeModelsList.length} รุ่น)
                     </div>
                   ` : `
                     <select onchange="onPriceListCampaignChange(this.value)" class="w-full bg-slate-50 border border-slate-200 focus:border-rose-500 rounded-xl p-2.5 font-bold text-slate-800 outline-none cursor-pointer">
-                      <option value="-1" ${Number(pl.campaignIdx) === -1 ? 'selected' : ''}>-- อัตโนมัติตามรุ่นรถ (GENRATE คอม 8%) --</option>
+                      <option value="-1" ${Number(pl.campaignIdx) === -1 ? 'selected' : ''}>-- อัตโนมัติตามรุ่นรถ (${autoStdLabel}) --</option>
                       ${stdCamps.map(it => `<option value="${it.index}" ${Number(pl.campaignIdx) === it.index ? 'selected' : ''}>${it.cp.finance} • ${getCampaignDisplayLabel(it.cp)}</option>`).join('')}
                     </select>
                   `}
@@ -2943,15 +2954,16 @@
       `;
     }
 
-    // ==================== 5. หน้าตั้งค่าระบบ (Settings — นำช่องจำกัดค่าคอมออกแล้ว) ====================
+    // ==================== 5. หน้าตั้งค่าระบบ (Settings — แยกแคมเปญตามแบรนด์แบบเข้มงวด 100%) ====================
 
     function getCampaignsForCurrentBrand() {
       const brandId = state.selectedBrand;
       const brandModelKeys = state.cars.filter(c => c.brand === brandId).map(c => getModelFolderKey(c.model));
       return state.campaigns.map((cp, idx) => ({ cp, idx })).filter(({ cp }) => {
-        if (cp.brand && cp.brand === brandId) return true;
+        // แยกแบรนด์แบบเข้มงวด: ถ้าระบุแบรนด์ไว้แล้วและไม่ตรงกับแบรนด์ปัจจุบัน ให้ตัดออกทันที
+        if (cp.brand) return cp.brand === brandId;
         const mKey = getModelFolderKey(cp.carModel);
-        if (mKey !== 'UNSPECIFIED_MODEL' && brandModelKeys.some(bm => bm === mKey || mKey.includes(bm) || bm.includes(mKey))) return true;
+        if (mKey !== 'UNSPECIFIED_MODEL' && brandModelKeys.some(bm => bm === mKey)) return true;
         return !cp.brand;
       });
     }
@@ -3851,17 +3863,10 @@
     }
 
     function matchCampaignsForCurrentModel() {
-      const targetModelKey = getModelFolderKey(state.selectedModel);
-      const stdPool = getCampaignsMatchingBrandAndMode('standard');
-      const easyPool = getCampaignsMatchingBrandAndMode('balloon');
+      const stdPool = getFilteredCampaignsForPlan('', 'standard', state.selectedModel);
+      const easyPool = getFilteredCampaignsForPlan('', 'balloon', state.selectedModel);
 
-      let matchedStd = null;
-      if (state.selectedModel && targetModelKey !== 'UNSPECIFIED_MODEL') {
-        matchedStd = stdPool.find(({ cp }) => getModelFolderKey(cp.carModel || cp.name).includes(targetModelKey)) || stdPool[0] || null;
-      } else {
-        matchedStd = stdPool[0] || null;
-      }
-
+      const matchedStd = stdPool[0] || null;
       state.plans.forEach(p => {
         if (matchedStd) {
           const cp = matchedStd.cp;
@@ -3877,13 +3882,7 @@
         }
       });
 
-      let matchedEasy = null;
-      if (state.selectedModel && targetModelKey !== 'UNSPECIFIED_MODEL') {
-        matchedEasy = easyPool.find(({ cp }) => getModelFolderKey(cp.carModel || cp.name).includes(targetModelKey)) || easyPool[0] || null;
-      } else {
-        matchedEasy = easyPool[0] || null;
-      }
-
+      const matchedEasy = easyPool[0] || null;
       if (matchedEasy) {
         const bCp = matchedEasy.cp;
         state.balloonPlan.campaignIdx = matchedEasy.index;
@@ -3949,6 +3948,9 @@
       state.accessories = 0;
       state.selectedModel = '';
       state.selectedCarId = null;
+      state.editingCarId = null;
+      state.editingCampaignIndex = null;
+      state.editingAccessoryId = null;
       state.plans = createDefaultPlans();
       state.balloonPlan = createDefaultBalloonPlan();
       state.priceList.selectedModels = [];
@@ -4057,15 +4059,15 @@
       if (!cp) return -1;
       const downPctVal = num(plan.downPct);
       if (cp.isEasyPay) {
-        if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) return 0;
-        if (downPctVal < 5) return -1;
+        if (plan.useSpecialDown && hasValidSpecialDownRow(cp)) return 0;
+        if (downPctVal < 5) return hasValidSpecialDownRow(cp) ? 0 : -1;
         for (const tier of EASY_PAY_DOWN_TIERS) {
           if (downPctVal >= tier - 1e-9) return tier;
         }
         return -1;
       }
-      if (plan.useSpecialDown || (downPctVal < 5 && hasValidSpecialDownRow(cp))) return 0;
-      if (downPctVal < 5) return -1;
+      if (plan.useSpecialDown && hasValidSpecialDownRow(cp)) return 0;
+      if (downPctVal < 5) return hasValidSpecialDownRow(cp) ? 0 : -1;
       for (const tier of DOWN_TIERS) {
         if (downPctVal >= tier - 1e-9) return tier;
       }
@@ -4175,7 +4177,6 @@
 
       if (!cp.rates || matchedTier === -1 || !cp.rates[matchedTier]) return null;
       const rate = cp.rates[matchedTier][plan.term];
-      // Strict: คืนค่าเฉพาะช่อง [ขั้นดาวน์ × จำนวนงวด] ที่มีตัวเลขจริงเท่านั้น ห้ามยืมงวดอื่น
       return isValidRateValue(rate) ? parseFloat(rate) : null;
     }
 
@@ -4302,6 +4303,12 @@
     }
 
     function updateBlackSummaryBoxDOM() {
+      // ป้องกันการคำนวณทับ State ในโหมดซื้อสด (ไม่มีกล่องสรุปดาวน์/ไฟแนนซ์)
+      if (state.step === 'cash') {
+        syncMarginToDeliveryFees();
+        return;
+      }
+
       const netPrice = getNetPriceWithoutDown();
       const mg = state.margin;
 
@@ -4535,7 +4542,7 @@
         const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
         const rawLbl = String(cp?.specialDownLabel || '0').trim();
         const net = getNetPriceWithoutDown();
-        plan.useSpecialDown = true;
+        plan.useSpecialDown = hasValidSpecialDownRow(cp);
         plan.customRate = '';
 
         if (rawLbl.includes('%') || num(rawLbl) === 0) {
@@ -4561,9 +4568,10 @@
       if (pctVal === '') return;
       const plan = state.plans.find(p => p.id === planId);
       if (plan) {
+        const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
         plan.downMode = 'pct';
         plan.downPct = Math.min(Math.max(num(pctVal), 0), 95);
-        plan.useSpecialDown = plan.downPct < 5;
+        plan.useSpecialDown = plan.downPct < 5 && hasValidSpecialDownRow(cp);
         const net = getNetPriceWithoutDown();
         plan.downAmt = Math.round(net * (plan.downPct / 100));
         enforceAllowedCommForPlan(plan);
@@ -4587,7 +4595,7 @@
 
         const cp = plan.campaignIdx >= 0 ? state.campaigns[plan.campaignIdx] : null;
         const specialAmt = cp && cp.specialDownLabel && !String(cp.specialDownLabel).includes('%') ? num(cp.specialDownLabel) : -1;
-        plan.useSpecialDown = (plan.downAmt === specialAmt) || (plan.downPct < 5);
+        plan.useSpecialDown = hasValidSpecialDownRow(cp) && ((plan.downAmt === specialAmt) || (plan.downPct < 5));
         enforceAllowedCommForPlan(plan);
 
         const pctInput = document.getElementById(`plan-${planId}-downPct`);
@@ -4659,7 +4667,6 @@
         }
         enforceAllowedCommForPlan(p);
 
-        // อัปเดต Dropdown จำนวนงวดของแผนนี้ให้แสดงเฉพาะงวดที่มีตัวเลขจริงในขั้นดาวน์ปัจจุบัน
         const termSel = document.getElementById(`plan-${p.id}-termSelect`);
         if (termSel) {
           const availForRow = getAvailableMonthsForPlan(p);
@@ -4690,7 +4697,6 @@
           }
         }
 
-        // สร้างข้อความแจ้งเตือนแบบ A
         let noProgMsg = '';
         if (cp && netPrice > 0 && !m.hasProgram) {
           if (availForRow.length === 0) {
@@ -4806,7 +4812,7 @@
         const cp = bp.campaignIdx >= 0 ? state.campaigns[bp.campaignIdx] : null;
         const rawLbl = String(cp?.specialDownLabel || '0').trim();
         const net = getNetPriceWithoutDown();
-        bp.useSpecialDown = true;
+        bp.useSpecialDown = hasValidSpecialDownRow(cp);
         bp.customRate = '';
 
         if (rawLbl.includes('%') || num(rawLbl) === 0) {
@@ -4831,9 +4837,10 @@
     function updateBalloonDownPct(pctVal) {
       if (pctVal === '') return;
       const bp = state.balloonPlan;
+      const cp = bp.campaignIdx >= 0 ? state.campaigns[bp.campaignIdx] : null;
       bp.downMode = 'pct';
       bp.downPct = Math.min(Math.max(num(pctVal), 0), 85);
-      bp.useSpecialDown = bp.downPct < 5;
+      bp.useSpecialDown = bp.downPct < 5 && hasValidSpecialDownRow(cp);
       const net = getNetPriceWithoutDown();
       bp.downAmt = Math.round(net * (bp.downPct / 100));
       enforceAllowedCommForPlan(bp);
@@ -4855,7 +4862,7 @@
 
       const cp = bp.campaignIdx >= 0 ? state.campaigns[bp.campaignIdx] : null;
       const specialAmt = cp && cp.specialDownLabel && !String(cp.specialDownLabel).includes('%') ? num(cp.specialDownLabel) : -1;
-      bp.useSpecialDown = (bp.downAmt === specialAmt) || (bp.downPct < 5);
+      bp.useSpecialDown = hasValidSpecialDownRow(cp) && ((bp.downAmt === specialAmt) || (bp.downPct < 5));
       enforceAllowedCommForPlan(bp);
 
       const pctInput = document.getElementById('balloon-downPct');
@@ -5083,7 +5090,7 @@
       if (document.getElementById('cashResNetTotal')) document.getElementById('cashResNetTotal').innerText = fmt(netTotal) + ' ฿';
     }
 
-    // ==================== PRICE LIST (อัตโนมัติ GENRATE คอม 8% + EASY PAY คอม 8%) ====================
+    // ==================== PRICE LIST (รองรับทุกแบรนด์: GENRATE → STANDARD/NORMAL/ปกติ → ไม่แถมประกัน + ซ่อนแถว 5%/10% ที่ว่าง) ====================
 
     function togglePriceListModel(modelName) {
       const formatted = formatEPower(modelName);
@@ -5222,6 +5229,8 @@
       const pool = getFilteredCampaignsForPlan(pl.financeText, 'standard', modelName);
       if (pool.length === 0) return null;
 
+      // ลำดับจับคู่อัตโนมัติสำหรับทุกแบรนด์:
+      // 1) GENRATE (ไม่แถมประกัน) → GENRATE (ทั้งหมด)
       const isGenrate = cp => String(cp.campaignName || '').toUpperCase().includes('GENRATE');
       const exactGenrate = pool.find(({ cp }) => String(cp.campaignName || '').trim().toUpperCase() === 'GENRATE' && !cp.freeInsurance);
       if (exactGenrate) return exactGenrate.cp;
@@ -5229,7 +5238,20 @@
       if (genrateNonFree) return genrateNonFree.cp;
       const anyGenrate = pool.find(({ cp }) => isGenrate(cp));
       if (anyGenrate) return anyGenrate.cp;
-      return pool[0].cp;
+
+      // 2) STANDARD / NORMAL / ปกติ (ไม่แถมประกัน → ทั้งหมด) สำหรับแบรนด์อื่น
+      const isStdName = cp => {
+        const nm = String(cp.campaignName || '').toUpperCase();
+        return nm.includes('STANDARD') || nm.includes('NORMAL') || nm.includes('ปกติ') || nm.includes('ทั่วไป');
+      };
+      const stdNonFree = pool.find(({ cp }) => isStdName(cp) && !cp.freeInsurance);
+      if (stdNonFree) return stdNonFree.cp;
+      const anyStd = pool.find(({ cp }) => isStdName(cp));
+      if (anyStd) return anyStd.cp;
+
+      // 3) แคมเปญไม่แถมประกันรายการแรกของรุ่นนั้น → pool[0]
+      const firstNonFree = pool.find(({ cp }) => !cp.freeInsurance);
+      return (firstNonFree || pool[0]).cp;
     }
 
     function getPriceListStandardRateAt8Pct(cp, tier, month) {
@@ -5332,6 +5354,12 @@
           downRowsSpec.push({ isSpecial: true, tier: 0, label: 'เริ่มต้น', rawSpecial: specialLbl });
         }
         [5, 10, 15, 20, 25].forEach(d => {
+          // ซ่อนแถว 5% หรือ 10% อัตโนมัติ หากรุ่น/แบรนด์นั้นไม่มีเรททั้งฝั่งผ่อนปกติและ Easy Pay (เช่น รถ EV ที่เริ่มดาวน์ 15%)
+          if ((d === 5 || d === 10) && (stdCp || easyCp)) {
+            const hasStdForTier = terms.some(m => !isNaN(getPriceListStandardRateAt8Pct(stdCp, d, m)));
+            const hasEasyForTier = showEasyPayCol && !isNaN(getPriceListEasyPayRateAt8Pct(easyCp, d));
+            if (!hasStdForTier && !hasEasyForTier) return;
+          }
           downRowsSpec.push({ isSpecial: false, tier: d, label: `${d}%` });
         });
 
@@ -5570,7 +5598,7 @@
       }
     }
 
-    // ==================== MARGIN & COMMISSION POPUP ENGINE (ล็อกไม่คิดคอมเมื่อไม่มีโปรแกรม) ====================
+    // ==================== MARGIN & COMMISSION POPUP ENGINE (ปลดล็อกค่าคอมเมื่อพิมพ์ดอกเบี้ยเอง) ====================
 
     function getCheckedAccessoriesTotal() {
       const modelAcc = getAccessoriesForCurrentModel();
@@ -5838,17 +5866,34 @@
       let activePlanObj = state.plans.find(p => p.id == state.margin.selectedPlanId) || state.plans[0];
       if (state.step === 'balloon') activePlanObj = state.balloonPlan;
 
+      const cp = activePlanObj.campaignIdx >= 0 ? state.campaigns[activePlanObj.campaignIdx] : null;
+      const isCustomRate = String(activePlanObj.customRate ?? '').trim() !== '';
       enforceAllowedCommForPlan(activePlanObj);
       const commInfo = getAllowedCommInfoForPlan(activePlanObj);
-      const isNoProgram = activePlanObj.customRate === '' && !commInfo.hasProgram;
 
-      if (commInfo.allowed.length === 0 || isNoProgram) {
+      // หากเซลล์พิมพ์ดอกเบี้ยเองด้วยมือ (customRate) ให้ปลดล็อก Dropdown ค่าคอมตามชุดของแคมเปญ
+      let optionsToShow = commInfo.allowed;
+      if (isCustomRate && optionsToShow.length === 0) {
+        if (cp && cp.isEasyPay) {
+          optionsToShow = [...new Set([Number(cp.easyCommCol1 ?? 8), Number(cp.easyCommCol2 ?? 16)])].sort((a, b) => a - b);
+        } else if (cp && Array.isArray(cp.commOptions) && cp.commOptions.length > 0) {
+          optionsToShow = [...cp.commOptions];
+        } else {
+          optionsToShow = [...DEFAULT_COMM_OPTIONS];
+        }
+      }
+
+      const isNoProgram = !isCustomRate && !commInfo.hasProgram;
+      if (optionsToShow.length === 0 || isNoProgram) {
         pctSel.innerHTML = `<option value="0" selected>ไม่มีโปรแกรม (0%)</option>`;
         pctSel.disabled = true;
       } else {
         pctSel.disabled = false;
+        if (!optionsToShow.includes(Number(activePlanObj.commPct))) {
+          activePlanObj.commPct = optionsToShow[0];
+        }
         const curPct = Number(activePlanObj.commPct);
-        pctSel.innerHTML = commInfo.allowed.map(pct => `<option value="${pct}" ${pct === curPct ? 'selected' : ''}>${pct}%</option>`).join('');
+        pctSel.innerHTML = optionsToShow.map(pct => `<option value="${pct}" ${pct === curPct ? 'selected' : ''}>${pct}%</option>`).join('');
       }
 
       const maxCapYears = getMaxCommYearsForCampaign(activePlanObj.campaignIdx);
@@ -5907,14 +5952,20 @@
 
       if (state.step === 'calc') {
         const plan = state.plans.find(p => p.id == state.margin.selectedPlanId) || state.plans[0];
+        const hasTableProg = getAllowedCommInfoForPlan(plan).hasProgram;
         plan.commPct = newPct;
-        plan.customRate = '';
-        enforceAllowedCommForPlan(plan);
+        if (hasTableProg) {
+          plan.customRate = '';
+          enforceAllowedCommForPlan(plan);
+        }
         calculateAll();
       } else if (state.step === 'balloon') {
+        const hasTableProg = getAllowedCommInfoForPlan(state.balloonPlan).hasProgram;
         state.balloonPlan.commPct = newPct;
-        state.balloonPlan.customRate = '';
-        enforceAllowedCommForPlan(state.balloonPlan);
+        if (hasTableProg) {
+          state.balloonPlan.customRate = '';
+          enforceAllowedCommForPlan(state.balloonPlan);
+        }
         calculateBalloon();
       }
       calculateMarginModal();
@@ -6043,7 +6094,7 @@
         subsidyAmt = 0;
         commAmt = b.commAmt;
         rateHintText = b.hasProgram
-          ? `💡 แผนบอลลูน (60 เดือน): คอม ${state.balloonPlan.commPct}% → ดอกเบี้ยจากตาราง ${b.rPct.toFixed(2)}% | ยอดจัด ${fmt(b.financeMain)} ฿`
+          ? `💡 แผนบอลลูน (60 เดือน): คอม ${state.balloonPlan.commPct}% → ดอกเบี้ย ${b.rPct.toFixed(2)}% | ยอดจัด ${fmt(b.financeMain)} ฿`
           : `⚠️ ดาวน์ ${state.balloonPlan.downPct}% ไม่มีโปรแกรมในแคมเปญ Easy Pay นี้`;
       } else {
         planLabel = 'ซื้อสด';
@@ -6303,9 +6354,11 @@
       df.otherFeeAmt = num(document.getElementById('valOtherFeeAmt').value);
 
       state.margin.chkReg = !df.useRegFee;
-      if (df.useDownDiscount) state.margin.downDiscount = df.downDiscount;
-      state.margin.chkVat = !df.useVat7;
-      state.margin.vatAmt = df.vat7;
+      if (state.step !== 'cash') {
+        if (df.useDownDiscount) state.margin.downDiscount = df.downDiscount;
+        state.margin.chkVat = !df.useVat7;
+        state.margin.vatAmt = df.vat7;
+      }
       updateBlackSummaryBoxDOM();
     }
 
@@ -7541,6 +7594,9 @@
       }
 
       state.loadedQuotationId = quotId;
+      state.editingCarId = null;
+      state.editingCampaignIndex = null;
+      state.editingAccessoryId = null;
       state.selectedBrand = payload.selectedBrand || state.selectedBrand;
       loadBrandProfile(state.selectedBrand);
       state.selectedModel = formatEPower(payload.selectedModel || '');
@@ -7614,9 +7670,9 @@
 
     function quickFillFinanceCampaignForm(finKey, campKey) {
       state.editingCampaignIndex = null;
-      const sample = state.campaigns.find(c => getFinanceFolderKey(c.finance) === finKey);
+      const sample = state.campaigns.find(c => (!c.brand || c.brand === state.selectedBrand) && getFinanceFolderKey(c.finance) === finKey);
       const subSample = campKey
-        ? state.campaigns.find(c => getFinanceFolderKey(c.finance) === finKey && getCampaignSubFolderKey(c.campaignName || c.name) === campKey)
+        ? state.campaigns.find(c => (!c.brand || c.brand === state.selectedBrand) && getFinanceFolderKey(c.finance) === finKey && getCampaignSubFolderKey(c.campaignName || c.name) === campKey)
         : null;
       render();
       setTimeout(() => {
@@ -8130,7 +8186,7 @@
         });
         if (rows.length === 0) {
           rows.push({
-            Finance: 'นิสสัน ลีสซิ่ง', CampaignName: 'GENRATE', CarModel: 'EXAMPLE',
+            Finance: 'กรุงศรี ออโต้', CampaignName: 'STANDARD', CarModel: 'EXAMPLE',
             MG_Type: 'normal', FreeInsurance: 'FALSE', MinLoanEnabled: 'FALSE', MinLoanAmount: 0,
             IsEasyPay: 'FALSE', BalloonPct: 30, ComPct: 8, ComMaxYears: 5,
             CommOptions: '0%, 4%, 8%, 10%, 12%', DownTier: '25%',
