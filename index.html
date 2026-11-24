@@ -8467,10 +8467,14 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const detailMsg = data.error || data.detail || `HTTP ${res.status}`;
+          const errParts = [];
+          if (data.error) errParts.push(data.error);
+          if (data.detail && (!data.error || !String(data.error).includes(String(data.detail)))) {
+            errParts.push(data.detail);
+          }
+          const detailMsg = errParts.join(' — ') || `HTTP ${res.status}`;
           throw new Error(detailMsg);
         }
-
         populateCampaignFormFromObject(data);
 
         if (statusDiv) {
