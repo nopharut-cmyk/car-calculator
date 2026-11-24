@@ -4555,7 +4555,7 @@
       return Number(eff.toFixed(4));
     }
 
-    function getCampaignApprovalWarnings(cp, financeAmt, netPrice, downPct, effectiveRate, totalInterest) {
+    function getCampaignApprovalWarnings(cp, financeAmt, netPrice, downPct, effectiveRate, financeReceivedInterest, tableRate = null) {
       if (!cp || netPrice <= 0) return [];
       const msgs = [];
       if (num(cp.maxDownPct) > 0 && num(downPct) > num(cp.maxDownPct) + 1e-9) {
@@ -4565,9 +4565,13 @@
         const prefix = cp.freeInsurance ? 'ดอกเบี้ยแถมประกัน' : (cp.campaignName || 'แคมเปญนี้');
         msgs.push(`${prefix} ยอดจัดต้องไม่ต่ำกว่า ${fmt(cp.minLoanAmount)} ฿`);
       }
-      if (num(cp.minInterestAmount) > 0 && totalInterest < num(cp.minInterestAmount)) {
-        msgs.push(`ดอกเบี้ยรวม (${fmt(Math.round(totalInterest))} ฿) ต่ำกว่าเกณฑ์ขั้นต่ำ ${fmt(cp.minInterestAmount)} ฿`);
+
+      // ข้ามการเช็กดอกเบี้ยรับขั้นต่ำ หากเรทหน้าตารางเป็น 0% หรือเป็นแคมเปญ MG พิเศษ (มีค่ายรถซับดอกเบี้ยเบื้องหลัง)
+      const isZeroOrFactorySub = (tableRate !== null && tableRate <= 0) || cp.mgType === 'special';
+      if (num(cp.minInterestAmount) > 0 && !isZeroOrFactorySub && financeReceivedInterest < num(cp.minInterestAmount)) {
+        msgs.push(`ดอกเบี้ยรับรวมซับ (${fmt(Math.round(financeReceivedInterest))} ฿) ต่ำกว่าเกณฑ์ขั้นต่ำ ${fmt(cp.minInterestAmount)} ฿`);
       }
+
       if (num(cp.maxRatePct) > 0 && effectiveRate !== null && effectiveRate > num(cp.maxRatePct) + 1e-6) {
         msgs.push(`ดอกเบี้ย ${effectiveRate.toFixed(2)}% เกินเพดานสูงสุดของแคมเปญ (${num(cp.maxRatePct).toFixed(2)}%)`);
       }
@@ -5154,7 +5158,8 @@
             allWarnings.push(`ดาวน์ ${p.downPct}% ไม่มีโปรแกรมผ่อน ${p.term} เดือนในแคมเปญนี้ (ผ่อนได้สูงสุด ${maxTerm} เดือน)`);
           }
         } else if (cp && m.hasProgram) {
-          allWarnings.push(...getCampaignApprovalWarnings(cp, m.finance, netPrice, p.downPct, m.rPct, m.totalInterest));
+          const financeReceivedInterest = m.totalInterest + m.subsidyAmt;
+          allWarnings.push(...getCampaignApprovalWarnings(cp, m.finance, netPrice, p.downPct, m.rPct, financeReceivedInterest, cellInfo.rate));
         }
 
         const warnMsg = allWarnings.join(' | ');
@@ -5467,7 +5472,8 @@
       if (cp && b.priceWithAcc > 0 && !b.hasProgram) {
         allWarnings.push(`ดาวน์ ${bp.downPct}% ไม่มีโปรแกรมในแคมเปญนี้`);
       } else if (cp && b.hasProgram) {
-        allWarnings.push(...getCampaignApprovalWarnings(cp, b.financeMain, b.priceWithAcc, bp.downPct, b.rPct, b.totalInterest));
+        const balTableRate = getTableRateInfoForPlan(bp).rate;
+        allWarnings.push(...getCampaignApprovalWarnings(cp, b.financeMain, b.priceWithAcc, bp.downPct, b.rPct, b.totalInterest, balTableRate));
       }
       const warnMsg = allWarnings.join(' | ');
 
@@ -6632,7 +6638,7 @@
       updateBlackSummaryBoxDOM();
       document.getElementById('marginModal').classList.add('hidden');
     }
-    // ==================== [สิ้นสุดโค้ดชุดที่ 4 — พิมพ์ "ต่อชุดที่ 5" เพื่อรับโค้ดชุดสุดท้าย] ====================
+    // ==================== [สิ้นสุดโค้ดชุดที่ 4 — นำไปต่อกับชุดที่ 5 เดิมได้เลย] ====================
 // ==================== PRINT MODAL, TEMPLATE SELECTOR (รูปแบบที่ 1, 2, 3) & EXPORT PNG/JPG ====================
 
     function updateTemplate3PhotoUI() {
